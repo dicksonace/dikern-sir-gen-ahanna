@@ -1,0 +1,54 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'router/app_router.dart';
+import 'services/api_client.dart';
+import 'state/auth_state.dart';
+import 'theme/app_theme.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
+
+  final api = ApiClient();
+  final auth = AuthState(api);
+  await auth.bootstrap();
+  final router = createRouter(auth);
+
+  runApp(SirGenAhannaApp(api: api, auth: auth, router: router));
+}
+
+class SirGenAhannaApp extends StatelessWidget {
+  final ApiClient api;
+  final AuthState auth;
+  final GoRouter router;
+
+  const SirGenAhannaApp({
+    super.key,
+    required this.api,
+    required this.auth,
+    required this.router,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        Provider.value(value: api),
+        ChangeNotifierProvider.value(value: auth),
+      ],
+      child: MaterialApp.router(
+        title: 'සර් ගෙන් අහන්න',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        routerConfig: router,
+      ),
+    );
+  }
+}
