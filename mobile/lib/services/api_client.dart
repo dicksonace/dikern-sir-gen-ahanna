@@ -70,6 +70,71 @@ class ApiClient {
     return AppUser.fromJson(await _handle(res) as Map<String, dynamic>);
   }
 
+  Future<AppUser> updateProfile({
+    required String name,
+    String? phone,
+    String? bio,
+    String? qualifications,
+    String? experience,
+  }) async {
+    final res = await http.put(
+      _uri('/profile'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name,
+        'phone': phone,
+        'bio': bio,
+        'qualifications': qualifications,
+        'experience': experience,
+      }),
+    );
+    return AppUser.fromJson(await _handle(res) as Map<String, dynamic>);
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String password,
+  }) async {
+    final res = await http.post(
+      _uri('/change-password'),
+      headers: _headers,
+      body: jsonEncode({
+        'current_password': currentPassword,
+        'password': password,
+        'password_confirmation': password,
+      }),
+    );
+    await _handle(res);
+  }
+
+  Future<String?> forgotPassword(String email) async {
+    final res = await http.post(
+      _uri('/forgot-password'),
+      headers: _headers,
+      body: jsonEncode({'email': email}),
+    );
+    final data = await _handle(res) as Map<String, dynamic>;
+    return data['reset_code'] as String?;
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    final res = await http.post(
+      _uri('/reset-password'),
+      headers: _headers,
+      body: jsonEncode({
+        'email': email,
+        'code': code,
+        'password': password,
+        'password_confirmation': password,
+      }),
+    );
+    await _handle(res);
+  }
+
   Future<bool> health() async {
     try {
       final res = await http.get(_uri('/health'), headers: _headers).timeout(const Duration(seconds: 4));
@@ -79,21 +144,35 @@ class ApiClient {
     }
   }
 
-  Future<List<Subject>> subjects() async {
-    final res = await http.get(_uri('/subjects'), headers: _headers);
+  Future<List<LearningTrack>> tracks({String? division}) async {
+    final res = await http.get(_uri('/tracks', division == null ? null : {'division': division}), headers: _headers);
+    final list = await _handle(res) as List;
+    return list.whereType<Map<String, dynamic>>().map(LearningTrack.fromJson).toList();
+  }
+
+  Future<List<Subject>> subjects({String? division, String? track}) async {
+    final query = <String, String>{
+      'division': ?division,
+      'track': ?track,
+    };
+    final res = await http.get(_uri('/subjects', query.isEmpty ? null : query), headers: _headers);
     final list = await _handle(res) as List;
     return list.whereType<Map<String, dynamic>>().map(Subject.fromJson).toList();
   }
 
-  Future<List<PackageModel>> packages() async {
-    final res = await http.get(_uri('/packages'), headers: _headers);
+  Future<List<PackageModel>> packages({String? division}) async {
+    final res = await http.get(_uri('/packages', division == null ? null : {'division': division}), headers: _headers);
     final list = await _handle(res) as List;
     return list.whereType<Map<String, dynamic>>().map(PackageModel.fromJson).toList();
   }
 
-  Future<List<TutorProfile>> tutors({String? subject}) async {
+  Future<List<TutorProfile>> tutors({String? subject, String? division}) async {
+    final query = <String, String>{
+      if (subject != null) 'subject': subject,
+      if (division != null) 'division': division,
+    };
     final res = await http.get(
-      _uri('/tutors', subject == null ? null : {'subject': subject}),
+      _uri('/tutors', query.isEmpty ? null : query),
       headers: _headers,
     );
     final list = await _handle(res) as List;

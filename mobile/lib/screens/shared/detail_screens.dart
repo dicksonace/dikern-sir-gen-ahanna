@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_client.dart';
+import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -26,8 +27,9 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tutor profile')),
+      appBar: AppBar(title: Text(law ? 'Adviser' : 'Tutor profile')),
       body: FutureBuilder(
         future: future,
         builder: (context, snap) {
@@ -77,6 +79,14 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                     Text('Qualifications: ${tutor.qualifications ?? '-'}'),
                     Text('Experience: ${tutor.experience ?? '-'}'),
                     const SizedBox(height: 12),
+                    if (law)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          'This is general guidance, not a court filing.',
+                          style: TextStyle(color: AppColors.muted, height: 1.4),
+                        ),
+                      ),
                     const Text('Available times', style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, children: tutor.availableSlots.map((s) => Chip(label: Text(s))).toList()),
@@ -85,7 +95,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () => context.push('/payment/1?tutorId=${tutor.userId}'),
-                        child: const Text('Choose package with this tutor'),
+                        child: Text(law ? 'Book a consultation' : 'Choose package with this tutor'),
                       ),
                     ),
                   ],
@@ -124,8 +134,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _load() async {
     final api = context.read<ApiClient>();
-    final packages = await api.packages();
-    tutors = await api.tutors();
+    final division = context.read<AuthState>().user?.division;
+    final packages = await api.packages(division: division);
+    tutors = await api.tutors(division: division);
     package = packages.firstWhere(
       (p) => p.id == int.parse(widget.packageId),
       orElse: () => packages.first,
@@ -167,6 +178,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
       appBar: AppBar(title: const Text('Bank transfer')),
       body: loading
@@ -194,13 +206,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Assign tutor', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
+                      Text(law ? 'Choose adviser' : 'Assign tutor', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<TutorProfile>(
                         initialValue: selectedTutor,
                         items: tutors.map((t) => DropdownMenuItem(value: t, child: Text(t.displayName))).toList(),
                         onChanged: (v) => setState(() => selectedTutor = v),
-                        decoration: const InputDecoration(labelText: 'Tutor'),
+                        decoration: InputDecoration(labelText: law ? 'Lawyer or counsel' : 'Tutor'),
                       ),
                     ],
                   ),
@@ -253,12 +265,13 @@ class LiveLessonScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
       backgroundColor: const Color(0xFF0B1F22),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
-        title: const Text('Live classroom'),
+        title: Text(law ? 'Consultation' : 'Live classroom'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -273,16 +286,18 @@ class LiveLessonScreen extends StatelessWidget {
                 ),
                 child: Stack(
                   children: [
-                    const Center(
+                    Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.videocam_rounded, color: Colors.white70, size: 54),
-                          SizedBox(height: 10),
-                          Text('Tutor camera', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                          SizedBox(height: 4),
-                          Text('Lesson marked live via API · WebRTC later',
-                              style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const Icon(Icons.videocam_rounded, color: Colors.white70, size: 54),
+                          const SizedBox(height: 10),
+                          Text(law ? 'Adviser' : 'Tutor camera', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(
+                            law ? 'Consultation marked live via API' : 'Lesson marked live via API · WebRTC later',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
                         ],
                       ),
                     ),

@@ -15,11 +15,18 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    public const TUTOR_ROLES = ['student', 'tutor', 'lecturer'];
+
+    public const LAW_ROLES = ['client', 'lawyer', 'counsel'];
+
+    public const PROVIDER_ROLES = ['tutor', 'lecturer', 'lawyer', 'counsel'];
+
     protected $fillable = [
         'name',
         'email',
         'password',
         'role',
+        'division',
         'phone',
         'avatar_url',
     ];
@@ -65,5 +72,14 @@ class User extends Authenticatable
     public function commissions(): HasMany
     {
         return $this->hasMany(Commission::class, 'tutor_id');
+    }
+
+    public static function divisionForRole(string $role): string
+    {
+        if ($role === 'admin') {
+            return 'platform';
+        }
+
+        return in_array($role, self::LAW_ROLES, true) ? 'law' : 'tutor';
     }
 }

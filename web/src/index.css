@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-teal: #0d7377;
+  --color-deep: #095456;
+  --color-sand: #f7f4ef;
+  --color-ink: #1a2b2c;
+  --color-muted: #5c6b73;
+  --color-line: #e3e8ea;
+  --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-sand);
+  color: var(--color-ink);
+}

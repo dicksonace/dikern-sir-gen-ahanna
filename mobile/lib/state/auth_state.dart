@@ -48,6 +48,11 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  void applyUser(AppUser next) {
+    user = next;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     await api.logout();
     final prefs = await SharedPreferences.getInstance();
@@ -59,9 +64,12 @@ class AuthState extends ChangeNotifier {
   String homeRouteForRole() {
     switch (user?.role) {
       case 'tutor':
+      case 'lecturer':
+      case 'lawyer':
+      case 'counsel':
         return '/tutor';
       case 'admin':
-        return '/admin';
+        return '/welcome';
       default:
         return '/student';
     }

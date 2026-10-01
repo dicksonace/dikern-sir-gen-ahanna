@@ -8,6 +8,7 @@ import '../../services/api_client.dart';
 import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../shared/account_profile.dart';
 
 class TutorShell extends StatefulWidget {
   const TutorShell({super.key});
@@ -25,7 +26,7 @@ class _TutorShellState extends State<TutorShell> {
       _TutorHome(),
       _TutorQuestions(),
       _TutorEarnings(),
-      _TutorProfile(),
+      AccountProfile(),
     ];
 
     return Scaffold(
@@ -33,8 +34,7 @@ class _TutorShellState extends State<TutorShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.teal.withValues(alpha: 0.12),
+        backgroundColor: Theme.of(context).colorScheme.surface,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.forum_outlined), selectedIcon: Icon(Icons.forum_rounded), label: 'Inbox'),
@@ -81,6 +81,7 @@ class _TutorHomeState extends State<_TutorHome> {
           final data = snap.data!;
           final next = data.lessons.where((l) => l.status == 'scheduled' || l.status == 'live').toList();
           final openQs = data.questions.where((q) => q.status == 'open').length;
+          final law = user?.isLaw == true;
 
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -92,18 +93,12 @@ class _TutorHomeState extends State<_TutorHome> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () async {
-                                await context.read<AuthState>().logout();
-                                if (context.mounted) context.go('/welcome');
-                              },
-                              icon: const Icon(Icons.logout_rounded, color: Colors.white),
-                            ),
-                            const Spacer(),
-                            const Text('Tutor · live API', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
-                          ],
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            user?.roleLabel ?? 'Tutor',
+                            style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                          ),
                         ),
                         Text('Hello, ${user?.name.split(' ').first ?? 'Tutor'}',
                             style: GoogleFonts.sora(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700)),
@@ -145,14 +140,14 @@ class _TutorHomeState extends State<_TutorHome> {
                     SoftCard(
                       child: Column(
                         children: [
-                          _row(Icons.help_outline, 'Open student questions', '$openQs waiting'),
+                          _row(Icons.help_outline, law ? 'Open client questions' : 'Open student questions', '$openQs waiting'),
                           const Divider(height: 22),
-                          _row(Icons.schedule_rounded, 'Lessons loaded', '${data.lessons.length} total'),
+                          _row(Icons.schedule_rounded, law ? 'Consultations loaded' : 'Lessons loaded', '${data.lessons.length} total'),
                         ],
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const SectionTitle('Lesson history', subtitle: 'From /api/lessons'),
+                    SectionTitle(law ? 'Consultation history' : 'Lesson history', subtitle: 'From /api/lessons'),
                     const SizedBox(height: 12),
                     ...data.lessons.map((l) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -231,7 +226,11 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
 
   Future<void> _reply(QuestionModel q, String type) async {
     final controller = TextEditingController(
-      text: type == 'text' ? 'Here is a quick explanation from your tutor.' : 'Attached $type reply (prototype path)',
+      text: type == 'text'
+          ? (context.read<AuthState>().user?.isLaw == true
+              ? 'Here is guidance on your question.'
+              : 'Here is a quick explanation from your tutor.')
+          : 'Attached $type reply (prototype path)',
     );
     final ok = await showDialog<bool>(
       context: context,
@@ -254,8 +253,9 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
 
   @override
   Widget build(BuildContext context) {
+    final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
-      appBar: AppBar(title: const Text('Student questions')),
+      appBar: AppBar(title: Text(law ? 'Client questions' : 'Student questions')),
       body: RefreshIndicator(
         onRefresh: () async => setState(() => future = context.read<ApiClient>().questions()),
         child: FutureBuilder(
@@ -389,45 +389,3 @@ class _TutorEarningsState extends State<_TutorEarnings> {
   }
 }
 
-class _TutorProfile extends StatelessWidget {
-  const _TutorProfile();
-
-  @override
-  Widget build(BuildContext context) {
-    final user = context.watch<AuthState>().user;
-    final t = user?.tutorProfile;
-    return Scaffold(
-      appBar: AppBar(title: const Text('My profile')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          SoftCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(user?.name ?? '', style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 20)),
-                Text(t?.subjectLabel ?? '', style: const TextStyle(color: AppColors.muted)),
-                const SizedBox(height: 12),
-                Text(t?.bio ?? ''),
-                const SizedBox(height: 12),
-                Text('Qualifications: ${t?.qualifications ?? '-'}'),
-                Text('Experience: ${t?.experience ?? '-'}'),
-                Text('Status: ${t?.status ?? '-'}'),
-                const SizedBox(height: 12),
-                Wrap(spacing: 8, children: (t?.availableSlots ?? []).map((s) => Chip(label: Text(s))).toList()),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.thumb_up_alt_rounded, color: AppColors.amber),
-                    const SizedBox(width: 6),
-                    Text('${t?.satisfactionPoints ?? 0} satisfaction points', style: const TextStyle(fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

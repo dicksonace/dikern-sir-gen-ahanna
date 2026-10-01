@@ -4,6 +4,7 @@ class AppUser {
   final String email;
   final String role;
   final String? phone;
+  final String? division;
   final TutorProfile? tutorProfile;
 
   const AppUser({
@@ -12,6 +13,7 @@ class AppUser {
     required this.email,
     required this.role,
     this.phone,
+    this.division,
     this.tutorProfile,
   });
 
@@ -22,6 +24,7 @@ class AppUser {
       email: json['email'] as String? ?? '',
       role: json['role'] as String? ?? 'student',
       phone: json['phone'] as String?,
+      division: json['division'] as String?,
       tutorProfile: json['tutor_profile'] is Map<String, dynamic>
           ? TutorProfile.fromJson(json['tutor_profile'] as Map<String, dynamic>)
           : null,
@@ -80,6 +83,29 @@ class TutorProfile {
   String get subjectLabel => subjects.map((s) => s.name).join(' · ');
 }
 
+extension AppUserCopy on AppUser {
+  bool get isLaw => division == 'law';
+
+  String get roleLabel {
+    switch (role) {
+      case 'student':
+        return 'Student';
+      case 'tutor':
+        return 'Tutor';
+      case 'lecturer':
+        return 'Lecturer';
+      case 'client':
+        return 'Client';
+      case 'lawyer':
+        return 'Lawyer';
+      case 'counsel':
+        return 'Legal counsel';
+      default:
+        return role;
+    }
+  }
+}
+
 class Subject {
   final int id;
   final String name;
@@ -102,6 +128,34 @@ class Subject {
       slug: json['slug'] as String? ?? '',
       icon: json['icon'] as String?,
       color: json['color'] as String?,
+    );
+  }
+}
+
+class LearningTrack {
+  final int id;
+  final String name;
+  final String slug;
+  final String kind;
+  final String? description;
+
+  const LearningTrack({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.kind,
+    this.description,
+  });
+
+  bool get isProgramme => kind == 'programme';
+
+  factory LearningTrack.fromJson(Map<String, dynamic> json) {
+    return LearningTrack(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'subjects',
+      description: json['description'] as String?,
     );
   }
 }

@@ -12,26 +12,53 @@ use App\Models\QuestionReply;
 use App\Models\SatisfactionPoint;
 use App\Models\Subject;
 use App\Models\Subscription;
+use App\Models\Track;
 use App\Models\TutorProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
 
 class PlatformController extends Controller
 {
-    public function subjects()
+    public function subjects(Request $request)
     {
-        return Subject::orderBy('name')->get();
+        return Subject::query()
+            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+            ->when($request->filled('track'), function ($query) use ($request) {
+                $slug = $request->string('track')->toString();
+                $query->whereHas('track', fn ($q) => $q->where('slug', $slug));
+            })
+            ->orderBy('name')
+            ->get();
     }
 
-    public function packages()
+    public function tracks(Request $request)
     {
-        return Package::where('is_active', true)->orderBy('price')->get();
+        return Track::query()
+            ->with('subjects')
+            ->where('is_active', true)
+            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function packages(Request $request)
+    {
+        return Package::query()
+            ->where('is_active', true)
+            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+            ->orderBy('price')
+            ->get();
     }
 
     public function tutors(Request $request)
     {
         $query = TutorProfile::with(['user', 'subjects'])
             ->where('status', 'approved');
+
+        if ($division = $this->division($request)) {
+            $query->whereHas('user', fn ($q) => $q->where('division', $division));
+        }
 
         if ($request->filled('subject')) {
             $slug = $request->string('subject');
@@ -296,5 +323,15 @@ class PlatformController extends Controller
             'active_subscriptions' => Subscription::where('status', 'active')->count(),
             'open_questions' => Question::where('status', 'open')->count(),
         ]);
+    }
+
+    protected function division(Request $request): ?string
+    {
+        $division = $request->string('division')->toString();
+        if (! in_array($division, ['tutor', 'law'], true)) {
+            $division = $request->user()?->division;
+        }
+
+        return in_array($division, ['tutor', 'law'], true) ? $division : null;
     }
 }

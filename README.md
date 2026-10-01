@@ -32,16 +32,38 @@ flutter pub get
 flutter run
 ```
 
-The app **calls live Laravel APIs** (login, tutors, packages, lessons, questions, admin).
+The app **calls live Laravel APIs** (login, tutors, packages, lessons, questions).
+
+Product notes:
+
+- [docs/app.md](docs/app.md) — both sides of the phone app. Learning is three tracks: A/L, O/L, and Grade 5 scholarship.
+- [docs/phases.md](docs/phases.md) — the order of work. Phase 5 is next: separate tutor and lecturer in the app.
 
 Tap a demo role on the welcome screen (password is always `password`).
 
 ### Demo accounts (password: `password`)
-| Role | Email |
-|------|--------|
-| Admin | `admin@sirgen.lk` |
-| Student | `student@sirgen.lk` |
-| Tutor | `nimal@sirgen.lk` |
+
+The mobile app has two sides. Admin is not on that screen.
+
+| Side | Role | Email |
+|------|------|--------|
+| Tutor | Student | `student@sirgen.lk` |
+| Tutor | Tutor | `nimal@sirgen.lk` |
+| Tutor | Lecturer | `lecturer@sirgen.lk` |
+| Law advice | Client | `client@sirgen.lk` |
+| Law advice | Lawyer | `lawyer@sirgen.lk` |
+| Law advice | Legal counsel | `counsel@sirgen.lk` |
+
+Admin signs in on the React website, not the app.
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173) while the API is running on port 8000.  
+Email `admin@sirgen.lk`, password `password`.
 
 ### `.env` DB settings (XAMPP default)
 ```

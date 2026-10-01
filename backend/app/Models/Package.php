@@ -9,6 +9,7 @@ class Package extends Model
 {
     protected $fillable = [
         'name',
+        'division',
         'description',
         'price',
         'weekly_hours',

@@ -109,24 +109,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       scale: Tween(begin: 0.96, end: 1.04).animate(
                         CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
                       ),
-                      child: Container(
-                        width: 132,
-                        height: 132,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 28,
-                              offset: const Offset(0, 14),
-                            ),
-                          ],
-                        ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(32),
                         child: Image.asset(
                           'assets/images/app_logo.png',
-                          fit: BoxFit.contain,
+                          width: 132,
+                          height: 132,
+                          fit: BoxFit.cover,
                         ),
                       ),
                     )
