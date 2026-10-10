@@ -77,7 +77,7 @@ class _TutorHomeState extends State<_TutorHome> {
       child: FutureBuilder(
         future: future,
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData) return const PageSkeleton.home();
           final data = snap.data!;
           final next = data.lessons.where((l) => l.status == 'scheduled' || l.status == 'live').toList();
           final openQs = data.questions.where((q) => q.status == 'open').length;
@@ -104,30 +104,6 @@ class _TutorHomeState extends State<_TutorHome> {
                             style: GoogleFonts.sora(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 6),
                         Text('$points satisfaction points', style: TextStyle(color: Colors.white.withValues(alpha: 0.88))),
-                        const SizedBox(height: 16),
-                        if (next.isNotEmpty)
-                          SoftCard(
-                            padding: const EdgeInsets.all(14),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.videocam_rounded, color: AppColors.teal),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    '${next.first.title} · ${next.first.student?.name ?? ''}',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    await context.read<ApiClient>().startLesson(next.first.id);
-                                    if (context.mounted) context.push('/live-lesson');
-                                  },
-                                  child: const Text('Start'),
-                                ),
-                              ],
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -137,6 +113,31 @@ class _TutorHomeState extends State<_TutorHome> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (next.isNotEmpty) ...[
+                      SoftCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.videocam_rounded, color: AppColors.teal),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '${next.first.title} · ${next.first.student?.name ?? ''}',
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                await context.read<ApiClient>().startLesson(next.first.id);
+                                if (context.mounted) context.push('/live-lesson');
+                              },
+                              child: const Text('Start'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     SoftCard(
                       child: Column(
                         children: [
@@ -147,7 +148,7 @@ class _TutorHomeState extends State<_TutorHome> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    SectionTitle(law ? 'Consultation history' : 'Lesson history', subtitle: 'From /api/lessons'),
+                    SectionTitle(law ? 'Consultation history' : 'Lesson history', subtitle: law ? 'Sessions with your clients' : 'Sessions with your students'),
                     const SizedBox(height: 12),
                     ...data.lessons.map((l) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
@@ -202,8 +203,8 @@ class Spad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-      sliver: SliverToBoxAdapter(child: Transform.translate(offset: const Offset(0, -12), child: child)),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+      sliver: SliverToBoxAdapter(child: child),
     );
   }
 }
@@ -217,6 +218,7 @@ class _TutorQuestions extends StatefulWidget {
 
 class _TutorQuestionsState extends State<_TutorQuestions> {
   late Future<List<QuestionModel>> future;
+  String query = '';
 
   @override
   void initState() {
@@ -261,12 +263,26 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
         child: FutureBuilder(
           future: future,
           builder: (context, snap) {
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            final questions = snap.data!;
-            if (questions.isEmpty) {
-              return ListView(children: const [SizedBox(height: 120), Center(child: Text('No questions yet'))]);
-            }
-            return ListView.builder(
+            if (!snap.hasData) return const PageSkeleton.list();
+            final questions = snap.data!.where((question) => textMatches(query, [
+              question.body,
+              question.student?.name,
+              question.subject?.name,
+              question.status,
+            ])).toList();
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: AppSearchField(
+                    hint: 'Search questions',
+                    onChanged: (value) => setState(() => query = value),
+                  ),
+                ),
+                Expanded(
+                  child: questions.isEmpty
+                      ? ListView(children: const [SizedBox(height: 120), Center(child: Text('No questions yet'))])
+                      : ListView.builder(
               padding: const EdgeInsets.all(20),
               itemCount: questions.length,
               itemBuilder: (context, i) {
@@ -308,6 +324,9 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
                   ),
                 );
               },
+            ),
+                ),
+              ],
             );
           },
         ),
@@ -325,6 +344,7 @@ class _TutorEarnings extends StatefulWidget {
 
 class _TutorEarningsState extends State<_TutorEarnings> {
   late Future<List<CommissionModel>> future;
+  String query = '';
 
   @override
   void initState() {
@@ -339,8 +359,9 @@ class _TutorEarningsState extends State<_TutorEarnings> {
       body: FutureBuilder(
         future: future,
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData) return const PageSkeleton.list();
           final items = snap.data!;
+          final shown = items.where((item) => textMatches(query, [item.month, item.status])).toList();
           final total = items.fold<double>(0, (a, b) => a + b.amount);
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -353,15 +374,20 @@ class _TutorEarningsState extends State<_TutorEarnings> {
                     const SizedBox(height: 8),
                     Text('Rs ${total.toStringAsFixed(0)}',
                         style: GoogleFonts.sora(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.tealDeep)),
-                    const Text('From /api/tutor/earnings', style: TextStyle(color: AppColors.muted)),
+                    const Text('Paid after a payment is verified', style: TextStyle(color: AppColors.muted)),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
-              if (items.isEmpty)
+              AppSearchField(
+                hint: 'Search months',
+                onChanged: (value) => setState(() => query = value),
+              ),
+              const SizedBox(height: 14),
+              if (shown.isEmpty)
                 const EmptyHint('No commissions yet. Appear after admin verifies a payment.')
               else
-                ...items.map((c) => Padding(
+                ...shown.map((c) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: SoftCard(
                         child: Row(

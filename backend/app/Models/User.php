@@ -49,6 +49,11 @@ class User extends Authenticatable
         return $this->hasOne(TutorProfile::class);
     }
 
+    public function identityDocument(): HasOne
+    {
+        return $this->hasOne(IdentityDocument::class)->latestOfMany();
+    }
+
     public function studentSubscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class, 'student_id');

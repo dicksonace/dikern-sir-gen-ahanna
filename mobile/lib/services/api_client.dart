@@ -47,11 +47,11 @@ class ApiClient {
     throw ApiException(message, statusCode: res.statusCode);
   }
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String email, String password, {required String division}) async {
     final res = await http.post(
       _uri('/login'),
       headers: _headers,
-      body: jsonEncode({'email': email, 'password': password}),
+      body: jsonEncode({'email': email, 'password': password, 'division': division}),
     );
     final data = await _handle(res) as Map<String, dynamic>;
     _token = data['token'] as String?;
@@ -107,11 +107,73 @@ class ApiClient {
     await _handle(res);
   }
 
-  Future<String?> forgotPassword(String email) async {
+  Future<Map<String, dynamic>> register({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? phone,
+  }) async {
+    final res = await http.post(
+      _uri('/register'),
+      headers: _headers,
+      body: jsonEncode({
+        'name': name,
+        'email': email,
+        'password': password,
+        'password_confirmation': password,
+        'role': role,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+      }),
+    );
+    final data = await _handle(res) as Map<String, dynamic>;
+    _token = data['token'] as String?;
+    return data;
+  }
+
+  Future<void> verifyEmail({
+    required String email,
+    required String division,
+    required String code,
+  }) async {
+    final res = await http.post(
+      _uri('/verify-email'),
+      headers: _headers,
+      body: jsonEncode({'email': email, 'division': division, 'code': code}),
+    );
+    await _handle(res);
+  }
+
+  Future<void> resendVerification({required String email, required String division}) async {
+    final res = await http.post(
+      _uri('/resend-verification'),
+      headers: _headers,
+      body: jsonEncode({'email': email, 'division': division}),
+    );
+    await _handle(res);
+  }
+
+  Future<AppUser> uploadIdentity({required String kind, required String path, required String filename}) async {
+    final request = http.MultipartRequest('POST', _uri('/kyc'));
+    request.headers['Accept'] = 'application/json';
+    if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
+    request.fields['kind'] = kind;
+    request.files.add(await http.MultipartFile.fromPath(
+      'document',
+      path,
+      filename: filename,
+    ));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    await _handle(res);
+    return me();
+  }
+
+  Future<String?> forgotPassword(String email, {required String division}) async {
     final res = await http.post(
       _uri('/forgot-password'),
       headers: _headers,
-      body: jsonEncode({'email': email}),
+      body: jsonEncode({'email': email, 'division': division}),
     );
     final data = await _handle(res) as Map<String, dynamic>;
     return data['reset_code'] as String?;
@@ -119,6 +181,7 @@ class ApiClient {
 
   Future<void> resetPassword({
     required String email,
+    required String division,
     required String code,
     required String password,
   }) async {
@@ -127,6 +190,7 @@ class ApiClient {
       headers: _headers,
       body: jsonEncode({
         'email': email,
+        'division': division,
         'code': code,
         'password': password,
         'password_confirmation': password,

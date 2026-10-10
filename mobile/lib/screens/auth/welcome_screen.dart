@@ -3,289 +3,172 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../../services/api_config.dart';
+import '../../services/api_client.dart';
 import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../shared/account_forms.dart';
 
-class WelcomeScreen extends StatefulWidget {
+class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
   @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
+  Widget build(BuildContext context) {
+    return const Scaffold(body: _AuthBody(registering: false));
+  }
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
+class LoginScreen extends StatelessWidget {
+  const LoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: _AuthBody(registering: false));
+  }
+}
+
+class RegisterScreen extends StatelessWidget {
+  const RegisterScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: _AuthBody(registering: true));
+  }
+}
+
+class _AuthBody extends StatefulWidget {
+  final bool registering;
+  const _AuthBody({required this.registering});
+
+  @override
+  State<_AuthBody> createState() => _AuthBodyState();
+}
+
+class _AuthBodyState extends State<_AuthBody> {
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final password = TextEditingController();
+  final confirm = TextEditingController();
+  final code = TextEditingController();
   String side = 'tutor';
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
-            child: GradientHeader(
-              height: MediaQuery.sizeOf(context).height * 0.36,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        'assets/images/app_logo.png',
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                        .animate()
-                        .fadeIn(delay: 80.ms)
-                        .scale(begin: const Offset(0.85, 0.85), curve: Curves.easeOutBack),
-                    const Spacer(),
-                    Text(
-                      'සර් ගෙන්\nඅහන්න',
-                      style: GoogleFonts.sora(
-                        color: Colors.white,
-                        fontSize: 42,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ).animate().fadeIn(delay: 120.ms).slideY(begin: 0.15),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Weekly tutoring, or legal advice — pick the side you need.',
-                      style: GoogleFonts.manrope(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 16,
-                        height: 1.45,
-                      ),
-                    ).animate().fadeIn(delay: 220.ms),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Transform.translate(
-            offset: const Offset(0, -28),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SoftCard(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Sign in with a demo account',
-                      style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 18),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Connected to ${ApiConfig.baseUrl}',
-                      style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(child: _SideChip(
-                          label: 'Tutor',
-                          selected: side == 'tutor',
-                          onTap: () => setState(() => side = 'tutor'),
-                        )),
-                        const SizedBox(width: 8),
-                        Expanded(child: _SideChip(
-                          label: 'Law advice',
-                          selected: side == 'law',
-                          onTap: () => setState(() => side = 'law'),
-                        )),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ..._rolesFor(side),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () => context.push('/login'),
-                      child: const Text('Manual email / password login'),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(delay: 280.ms).slideY(begin: 0.12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SideChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SideChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.teal : AppColors.sand,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: selected ? Colors.white : AppColors.ink,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-List<Widget> _rolesFor(String side) {
-  final roles = side == 'law'
-      ? const [
-          _Role('Client', 'client@sirgen.lk', Icons.person_rounded),
-          _Role('Lawyer', 'lawyer@sirgen.lk', Icons.balance_rounded),
-          _Role('Legal counsel', 'counsel@sirgen.lk', Icons.gavel_rounded),
-        ]
-      : const [
-          _Role('Student', 'student@sirgen.lk', Icons.school_rounded),
-          _Role('Tutor', 'nimal@sirgen.lk', Icons.record_voice_over_rounded),
-          _Role('Lecturer', 'lecturer@sirgen.lk', Icons.co_present_rounded),
-        ];
-
-  return [
-    for (var i = 0; i < roles.length; i++) ...[
-      if (i > 0) const SizedBox(height: 10),
-      _QuickLogin(title: roles[i].title, subtitle: roles[i].email, icon: roles[i].icon, email: roles[i].email),
-    ],
-  ];
-}
-
-class _Role {
-  final String title;
-  final String email;
-  final IconData icon;
-  const _Role(this.title, this.email, this.icon);
-}
-
-class _QuickLogin extends StatefulWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String email;
-
-  const _QuickLogin({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.email,
-  });
-
-  @override
-  State<_QuickLogin> createState() => _QuickLoginState();
-}
-
-class _QuickLoginState extends State<_QuickLogin> {
+  String role = 'student';
   bool loading = false;
+  bool hidePassword = true;
+  bool awaitingCode = false;
 
-  Future<void> _login() async {
+  static const learningRoles = [
+    ('student', 'Student'),
+    ('tutor', 'Tutor'),
+    ('lecturer', 'Lecturer'),
+  ];
+  static const lawRoles = [
+    ('client', 'Client'),
+    ('lawyer', 'Lawyer'),
+    ('counsel', 'Legal counsel'),
+  ];
+
+  List<(String, String)> get roles => side == 'law' ? lawRoles : learningRoles;
+  String get sideName => side == 'law' ? 'Law advice' : 'Learning';
+
+  @override
+  void dispose() {
+    name.dispose();
+    email.dispose();
+    phone.dispose();
+    password.dispose();
+    confirm.dispose();
+    code.dispose();
+    super.dispose();
+  }
+
+  void _setSide(String next) {
+    setState(() {
+      side = next;
+      role = next == 'law' ? 'client' : 'student';
+    });
+  }
+
+  Future<void> _submit() async {
+    final address = email.text.trim();
+    if (address.isEmpty || password.text.isEmpty || (widget.registering && name.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fill in your name, email, and password.')),
+      );
+      return;
+    }
+    if (widget.registering && password.text != confirm.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match.')),
+      );
+      return;
+    }
     setState(() => loading = true);
     final auth = context.read<AuthState>();
     try {
-      await auth.login(widget.email, 'password');
+      if (widget.registering) {
+        final data = await auth.register(
+          name: name.text,
+          email: address,
+          password: password.text,
+          role: role,
+          phone: phone.text.trim(),
+        );
+        if (!mounted) return;
+        if (data['verification_required'] == true) {
+          final sent = data['verification_code'];
+          setState(() {
+            awaitingCode = true;
+            if (sent is String) code.text = sent;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('We emailed a confirmation code. Enter it to finish.')),
+          );
+          return;
+        }
+      } else {
+        await auth.login(address, password.text, division: side);
+      }
       if (!mounted) return;
       context.go(auth.homeRouteForRole());
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
-      );
+      if ('$e'.contains('Confirm your email')) {
+        setState(() => awaitingCode = true);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.sand,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: loading ? null : _login,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.teal.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(widget.icon, color: AppColors.teal),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    Text(widget.subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-                  ],
-                ),
-              ),
-              if (loading)
-                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              else
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final email = TextEditingController(text: 'student@sirgen.lk');
-  final password = TextEditingController(text: 'password');
-  bool loading = false;
-
-  @override
-  void dispose() {
-    email.dispose();
-    password.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
+  Future<void> _confirmEmail() async {
+    if (code.text.trim().isEmpty) return;
     setState(() => loading = true);
-    final auth = context.read<AuthState>();
     try {
-      await auth.login(email.text, password.text);
+      await context.read<ApiClient>().verifyEmail(
+            email: email.text.trim(),
+            division: side,
+            code: code.text.trim(),
+          );
       if (!mounted) return;
-      context.go(auth.homeRouteForRole());
+      await context.read<AuthState>().login(email.text.trim(), password.text, division: side);
+      if (!mounted) return;
+      context.go(context.read<AuthState>().homeRouteForRole());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _resendCode() async {
+    setState(() => loading = true);
+    try {
+      await context.read<ApiClient>().resendVerification(email: email.text.trim(), division: side);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A new code is on the way.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -296,49 +179,232 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          SoftCard(
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        GradientHeader(
+          height: 0,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: email,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: password,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ForgotPasswordScreen(initialEmail: email.text.trim()),
-                      ),
-                    ),
-                    child: const Text('Forgot password?'),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
+                ).animate().fadeIn(delay: 80.ms),
+                const SizedBox(height: 16),
+                Text(
+                  'සර් ගෙන්\nඅහන්න',
+                  style: GoogleFonts.sora(
+                    color: Colors.white,
+                    fontSize: 36,
+                    height: 1.05,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: loading ? null : _submit,
-                    child: loading
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Sign in'),
+                const SizedBox(height: 10),
+                Text(
+                  widget.registering
+                      ? 'Create a $sideName account. The same email can also open the other side.'
+                      : 'Choose a side, then sign in. One email can have both.',
+                  style: GoogleFonts.manrope(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: 15,
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          child: SoftCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SideTabs(side: side, onChanged: _setSide),
+                const SizedBox(height: 8),
+                Text(
+                  side == 'law'
+                      ? 'Clients, lawyers, and legal counsel.'
+                      : 'Students, tutors, and lecturers.',
+                  style: const TextStyle(color: AppColors.muted, height: 1.35),
+                ),
+                const SizedBox(height: 16),
+                if (widget.registering) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final item in roles)
+                        ChoiceChip(
+                          label: Text(item.$2),
+                          selected: role == item.$1,
+                          onSelected: (_) => setState(() => role = item.$1),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: name,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Full name'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: email,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+                if (widget.registering) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Phone (optional)'),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: password,
+                  obscureText: hidePassword,
+                  textInputAction: widget.registering ? TextInputAction.next : TextInputAction.done,
+                  onSubmitted: widget.registering ? null : (_) => loading ? null : _submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => hidePassword = !hidePassword),
+                      icon: Icon(hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    ),
+                  ),
+                ),
+                if (widget.registering) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirm,
+                    obscureText: hidePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => loading ? null : _submit(),
+                    decoration: const InputDecoration(labelText: 'Confirm password'),
+                  ),
+                ],
+                if (awaitingCode) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: code,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Email confirmation code'),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: loading ? null : _confirmEmail,
+                    child: const Text('Confirm email'),
+                  ),
+                  TextButton(
+                    onPressed: loading ? null : _resendCode,
+                    child: const Text('Send the code again'),
+                  ),
+                ],
+                if (!widget.registering)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordScreen(
+                            initialEmail: email.text.trim(),
+                            division: side,
+                          ),
+                        ),
+                      ),
+                      child: const Text('Forgot password?'),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: loading ? null : _submit,
+                    child: loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(widget.registering ? 'Create $sideName account' : 'Sign in to $sideName'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.go(widget.registering ? '/welcome' : '/register'),
+                  child: Text(widget.registering ? 'Already have an account? Sign in' : 'New here? Create an account'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SideTabs extends StatelessWidget {
+  final String side;
+  final ValueChanged<String> onChanged;
+
+  const _SideTabs({required this.side, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.sand,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          _tab('Learning', 'tutor'),
+          _tab('Law advice', 'law'),
         ],
+      ),
+    );
+  }
+
+  Widget _tab(String label, String value) {
+    final selected = side == value;
+    return Expanded(
+      child: Material(
+        color: selected ? AppColors.teal : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: () => onChanged(value),
+          borderRadius: BorderRadius.circular(11),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : AppColors.ink,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

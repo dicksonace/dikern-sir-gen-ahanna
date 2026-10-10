@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\IdentityController;
 use App\Http\Controllers\Api\PlatformController;
 use App\Http\Controllers\Api\TrackController;
 use Illuminate\Support\Facades\Route;
@@ -12,10 +13,12 @@ Route::get('/health', fn () => response()->json([
     'mode' => 'prototype',
 ]));
 
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:8,1');
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:8,1');
+Route::post('/resend-verification', [AuthController::class, 'resendVerification'])->middleware('throttle:3,1');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:6,1');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:6,1');
 
 Route::get('/subjects', [PlatformController::class, 'subjects']);
 Route::get('/tracks', [PlatformController::class, 'tracks']);
@@ -30,6 +33,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/kyc', [IdentityController::class, 'show']);
+    Route::post('/kyc', [IdentityController::class, 'store']);
 
     Route::post('/subscribe', [PlatformController::class, 'subscribe']);
     Route::get('/my-subscriptions', [PlatformController::class, 'mySubscriptions']);
@@ -50,6 +55,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tracks/{track}/subjects', [TrackController::class, 'storeSubject']);
         Route::put('/subjects/{subject}', [TrackController::class, 'updateSubject']);
         Route::get('/stats', [PlatformController::class, 'adminStats']);
+        Route::get('/kyc', [IdentityController::class, 'pending']);
+        Route::get('/kyc/{id}/file', [IdentityController::class, 'file']);
+        Route::post('/kyc/{id}/approve', [IdentityController::class, 'approve']);
+        Route::post('/kyc/{id}/reject', [IdentityController::class, 'reject']);
         Route::get('/pending-tutors', [PlatformController::class, 'pendingTutors']);
         Route::post('/tutors/{id}/approve', [PlatformController::class, 'approveTutor']);
         Route::get('/pending-payments', [PlatformController::class, 'pendingPayments']);

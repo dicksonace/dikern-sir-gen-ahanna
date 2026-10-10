@@ -5,6 +5,10 @@ class AppUser {
   final String role;
   final String? phone;
   final String? division;
+  final bool emailVerified;
+  final String? identityStatus;
+  final String? identityKind;
+  final String? identityNote;
   final TutorProfile? tutorProfile;
 
   const AppUser({
@@ -14,6 +18,10 @@ class AppUser {
     required this.role,
     this.phone,
     this.division,
+    this.emailVerified = true,
+    this.identityStatus,
+    this.identityKind,
+    this.identityNote,
     this.tutorProfile,
   });
 
@@ -25,6 +33,10 @@ class AppUser {
       role: json['role'] as String? ?? 'student',
       phone: json['phone'] as String?,
       division: json['division'] as String?,
+      emailVerified: json['email_verified_at'] != null,
+      identityStatus: json['identity_document'] is Map ? json['identity_document']['status'] as String? : null,
+      identityKind: json['identity_document'] is Map ? json['identity_document']['kind'] as String? : null,
+      identityNote: json['identity_document'] is Map ? json['identity_document']['note'] as String? : null,
       tutorProfile: json['tutor_profile'] is Map<String, dynamic>
           ? TutorProfile.fromJson(json['tutor_profile'] as Map<String, dynamic>)
           : null,

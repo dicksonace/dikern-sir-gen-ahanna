@@ -153,6 +153,137 @@ class GradientHeader extends StatelessWidget {
   }
 }
 
+bool textMatches(String query, Iterable<String?> parts) {
+  final needle = query.trim().toLowerCase();
+  if (needle.isEmpty) return true;
+  return parts.any((part) => (part ?? '').toLowerCase().contains(needle));
+}
+
+class AppSearchField extends StatelessWidget {
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  const AppSearchField({super.key, required this.onChanged, this.hint = 'Search'});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.search_rounded),
+        isDense: true,
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surface,
+      ),
+    );
+  }
+}
+
+class LoadingPulse extends StatefulWidget {
+  final Widget child;
+  const LoadingPulse({super.key, required this.child});
+
+  @override
+  State<LoadingPulse> createState() => _LoadingPulseState();
+}
+
+class _LoadingPulseState extends State<LoadingPulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final color = dark ? const Color(0xFF2A383B) : const Color(0xFFE4E9EB);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: 0.45 + (_controller.value * 0.55),
+          child: IconTheme(
+            data: IconThemeData(color: color),
+            child: child!,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class SkeletonBox extends StatelessWidget {
+  final double height;
+  final double width;
+  final double radius;
+
+  const SkeletonBox({super.key, this.height = 14, this.width = double.infinity, this.radius = 8});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: height,
+      width: width,
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF2A383B) : const Color(0xFFE4E9EB),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+class PageSkeleton extends StatelessWidget {
+  final bool home;
+  const PageSkeleton.home({super.key}) : home = true;
+  const PageSkeleton.list({super.key}) : home = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LoadingPulse(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        children: [
+          if (home) ...[
+            const SkeletonBox(height: 28, width: 180),
+            const SizedBox(height: 10),
+            const SkeletonBox(height: 14, width: 120),
+            const SizedBox(height: 18),
+          ] else ...[
+            const SkeletonBox(height: 48, radius: 14),
+            const SizedBox(height: 16),
+          ],
+          for (var i = 0; i < 4; i++) ...[
+            SoftCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SkeletonBox(height: 16, width: 160),
+                  const SizedBox(height: 10),
+                  const SkeletonBox(height: 12),
+                  const SizedBox(height: 8),
+                  SkeletonBox(height: 12, width: i.isEven ? 220 : 140),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class EmptyHint extends StatelessWidget {
   final String text;
   const EmptyHint(this.text, {super.key});

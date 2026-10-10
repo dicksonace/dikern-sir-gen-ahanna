@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Commission;
+use App\Models\IdentityDocument;
 use App\Models\Lesson;
 use App\Models\Package;
 use App\Models\Payment;
@@ -15,7 +16,9 @@ use App\Models\Subscription;
 use App\Models\Track;
 use App\Models\TutorProfile;
 use App\Models\User;
+use App\Support\AccountMailer;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class PlatformController extends Controller
 {
@@ -120,12 +123,7 @@ class PlatformController extends Controller
     {
         $user = $request->user();
         $query = Lesson::with(['student', 'tutor']);
-
-        if ($user->role === 'student') {
-            $query->where('student_id', $user->id);
-        } elseif ($user->role === 'tutor') {
-            $query->where('tutor_id', $user->id);
-        }
+        $this->limitToPerson($query, $user, 'student_id', 'tutor_id');
 
         return $query->orderBy('scheduled_at')->get();
     }
@@ -148,12 +146,7 @@ class PlatformController extends Controller
     {
         $user = $request->user();
         $query = Question::with(['student', 'tutor', 'subject', 'replies']);
-
-        if ($user->role === 'student') {
-            $query->where('student_id', $user->id);
-        } elseif ($user->role === 'tutor') {
-            $query->where('tutor_id', $user->id);
-        }
+        $this->limitToPerson($query, $user, 'student_id', 'tutor_id');
 
         return $query->latest()->get();
     }
@@ -250,8 +243,19 @@ class PlatformController extends Controller
 
     public function approveTutor(int $id)
     {
-        $profile = TutorProfile::findOrFail($id);
+        $profile = TutorProfile::with('user')->findOrFail($id);
+        $hasIdentity = IdentityDocument::where('user_id', $profile->user_id)->where('status', 'approved')->exists();
+
+        if (! $hasIdentity) {
+            throw ValidationException::withMessages([
+                'kyc' => ['Approve this person\'s identity document before approving the profile.'],
+            ]);
+        }
+
         $profile->update(['status' => 'approved']);
+        if ($profile->user) {
+            AccountMailer::queueProfileApproved($profile->user);
+        }
 
         return response()->json($profile->load(['user', 'subjects']));
     }
@@ -279,6 +283,11 @@ class PlatformController extends Controller
             'starts_at' => now()->toDateString(),
             'ends_at' => now()->addMonth()->toDateString(),
         ]);
+
+        $student = User::find($sub->student_id);
+        if ($student) {
+            AccountMailer::queuePaymentVerified($student, $sub->package->name ?? 'your package');
+        }
 
         $tutor = User::with('tutorProfile')->find($sub->tutor_id);
         $rate = (float) ($tutor->tutorProfile->commission_rate ?? 60);
@@ -323,6 +332,23 @@ class PlatformController extends Controller
             'active_subscriptions' => Subscription::where('status', 'active')->count(),
             'open_questions' => Question::where('status', 'open')->count(),
         ]);
+    }
+
+    protected function limitToPerson($query, User $user, string $askerColumn, string $providerColumn): void
+    {
+        if (in_array($user->role, ['student', 'client'], true)) {
+            $query->where($askerColumn, $user->id);
+
+            return;
+        }
+
+        if (in_array($user->role, User::PROVIDER_ROLES, true)) {
+            $query->where($providerColumn, $user->id);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
     }
 
     protected function division(Request $request): ?string

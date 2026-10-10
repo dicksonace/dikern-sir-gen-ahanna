@@ -1,8 +1,10 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
+import '../../services/api_client.dart';
 import '../../state/app_settings.dart';
 import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
@@ -86,6 +88,8 @@ class AccountProfile extends StatelessWidget {
                   _AccountCard(user: user),
                   const SizedBox(height: 22),
                 ],
+                const _IdentityCard(),
+                const SizedBox(height: 22),
                 Text('Settings', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 _SettingsRow(
@@ -161,6 +165,109 @@ class AccountProfile extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IdentityCard extends StatefulWidget {
+  const _IdentityCard();
+
+  @override
+  State<_IdentityCard> createState() => _IdentityCardState();
+}
+
+class _IdentityCardState extends State<_IdentityCard> {
+  String kind = 'nic';
+  bool sending = false;
+
+  static const kinds = [
+    ('nic', 'NIC'),
+    ('passport', 'Passport'),
+    ('driving_licence', 'Driving licence'),
+  ];
+
+  Future<void> _upload() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: false,
+    );
+    final file = picked?.files.single;
+    final path = file?.path;
+    if (path == null || !mounted) return;
+    final api = context.read<ApiClient>();
+    final auth = context.read<AuthState>();
+    setState(() => sending = true);
+    try {
+      final updated = await api.uploadIdentity(
+            kind: kind,
+            path: path,
+            filename: file?.name ?? 'identity',
+          );
+      if (!mounted) return;
+      auth.applyUser(updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document sent. An admin will check it, and we emailed you.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = context.watch<AuthState>().user;
+    final status = user?.identityStatus;
+    final label = switch (status) {
+      'pending' => 'Waiting for an admin to check it.',
+      'approved' => 'Approved.',
+      'rejected' => 'Needs another copy.',
+      _ => 'Not uploaded yet.',
+    };
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Identity document', style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          const Text(
+            'Upload a NIC, passport, or driving licence so an admin can verify this account.',
+            style: TextStyle(height: 1.35),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.tealDeep)),
+          if (status == 'rejected' && (user?.identityNote?.isNotEmpty ?? false))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(user!.identityNote!, style: const TextStyle(height: 1.35)),
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final item in kinds)
+                ChoiceChip(
+                  label: Text(item.$2),
+                  selected: kind == item.$1,
+                  onSelected: sending ? null : (_) => setState(() => kind = item.$1),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: sending || status == 'approved' ? null : _upload,
+              child: sending
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(status == null || status == 'rejected' ? 'Upload document' : 'Replace document'),
             ),
           ),
         ],

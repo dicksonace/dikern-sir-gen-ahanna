@@ -33,7 +33,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
       body: FutureBuilder(
         future: future,
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snap.hasData) return const PageSkeleton.list();
           final tutor = snap.data!;
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -182,7 +182,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Bank transfer')),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const PageSkeleton.list()
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

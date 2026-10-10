@@ -23,6 +23,7 @@ export type Overview = {
   learning: { students: number; tutors: number; lecturers: number }
   law: { clients: number; lawyers: number; counsel: number }
   pending_profiles: number
+  pending_kyc: number
   pending_payments: number
   open_questions: number
   pending: PendingProfile[]
@@ -72,8 +73,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const data = text ? JSON.parse(text) : null
 
   if (!response.ok) {
-    const emailError = data?.errors?.email?.[0]
-    const message = emailError || data?.message || `Request failed (${response.status})`
+    const firstError = data?.errors ? Object.values(data.errors as Record<string, string[]>)[0]?.[0] : undefined
+    const message = firstError || data?.message || `Request failed (${response.status})`
     throw new ApiError(message, response.status)
   }
 

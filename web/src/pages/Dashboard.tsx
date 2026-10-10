@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type Overview } from '../api'
+import { api, getToken, type Overview } from '../api'
 import { useAuth } from '../auth'
 import { AdminShell } from '../components/AdminShell'
 
@@ -17,12 +17,19 @@ export function DashboardPage() {
   const { user } = useAuth()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [error, setError] = useState('')
-  const [busyId, setBusyId] = useState<number | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [kyc, setKyc] = useState<KycDocument[]>([])
+  const [notes, setNotes] = useState<Record<number, string>>({})
 
   async function load() {
     setError('')
     try {
-      setOverview(await api<Overview>('/admin/overview'))
+      const [nextOverview, nextKyc] = await Promise.all([
+        api<Overview>('/admin/overview'),
+        api<KycDocument[]>('/admin/kyc'),
+      ])
+      setOverview(nextOverview)
+      setKyc(nextKyc)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load the dashboard.')
     }
@@ -35,12 +42,45 @@ export function DashboardPage() {
   }, [user])
 
   async function approve(id: number) {
-    setBusyId(id)
+    setBusyId(`profile-${id}`)
     try {
       await api(`/admin/tutors/${id}/approve`, { method: 'POST' })
       await load()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not approve.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function openDocument(id: number) {
+    const token = getToken()
+    const response = await fetch(`/api/admin/kyc/${id}/file`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      setError('Could not open that document.')
+      return
+    }
+    const blob = await response.blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener')
+  }
+
+  async function decideKyc(id: number, decision: 'approve' | 'reject') {
+    if (decision === 'reject' && !(notes[id] ?? '').trim()) {
+      setError('Write a short reason before asking them to upload again.')
+      return
+    }
+    setBusyId(`kyc-${id}`)
+    setError('')
+    try {
+      await api(`/admin/kyc/${id}/${decision}`, {
+        method: 'POST',
+        body: decision === 'reject' ? JSON.stringify({ note: notes[id] }) : undefined,
+      })
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not review that document.')
     } finally {
       setBusyId(null)
     }
@@ -60,8 +100,9 @@ export function DashboardPage() {
             <p className="mt-2 max-w-2xl text-muted">
               Signed in as {user?.email}. Learning tracks and law practice areas are managed here. People still use the mobile app.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Stat label="Waiting for approval" value={overview?.pending_profiles ?? '—'} />
+              <Stat label="Identity documents" value={overview?.pending_kyc ?? '—'} />
               <Stat label="Payments to check" value={overview?.pending_payments ?? '—'} />
               <Stat label="Open questions" value={overview?.open_questions ?? '—'} />
             </div>
@@ -134,6 +175,57 @@ export function DashboardPage() {
           </div>
         </div>
 
+        <section id="identity" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <h2 className="text-xl font-semibold">Identity documents</h2>
+          <p className="mt-1 text-sm text-muted">People upload a NIC, passport, or driving licence. Approve it here before you approve their profile.</p>
+          {kyc.length === 0 ? <p className="mt-4 text-sm text-muted">No documents are waiting.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {kyc.map((document) => {
+              const person = document.user
+              const side = person?.division === 'law' ? 'Law advice' : 'Learning'
+              return (
+                <li key={document.id} className="rounded-2xl border border-line p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{person?.name ?? 'Unknown'}</p>
+                      <p className="text-sm text-muted">
+                        {side} · {roleLabel[person?.role ?? ''] ?? person?.role} · {kindLabel[document.kind] ?? document.kind}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => void openDocument(document.id)} className="rounded-xl border border-line px-3 py-2 text-sm font-semibold">
+                      Open file
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === `kyc-${document.id}`}
+                      onClick={() => void decideKyc(document.id, 'approve')}
+                      className="rounded-xl bg-teal px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      value={notes[document.id] ?? ''}
+                      onChange={(event) => setNotes((current) => ({ ...current, [document.id]: event.target.value }))}
+                      placeholder="Reason, if you need a clearer copy"
+                      className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={busyId === `kyc-${document.id}`}
+                      onClick={() => void decideKyc(document.id, 'reject')}
+                      className="rounded-xl border border-line px-3 py-2 text-sm font-semibold"
+                    >
+                      Ask again
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+
         <section id="waiting" className="mt-6 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Waiting for approval</h2>
           <p className="mt-1 text-sm text-muted">Tutors, lecturers, lawyers, and counsel appear here until you approve them.</p>
@@ -159,11 +251,11 @@ export function DashboardPage() {
                   </div>
                   <button
                     type="button"
-                    disabled={busyId === profile.id}
+                    disabled={busyId === `profile-${profile.id}`}
                     onClick={() => void approve(profile.id)}
                     className="ml-auto rounded-xl bg-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {busyId === profile.id ? 'Approving…' : 'Approve'}
+                    {busyId === `profile-${profile.id}` ? 'Approving…' : 'Approve'}
                   </button>
                 </li>
               )
@@ -173,6 +265,24 @@ export function DashboardPage() {
       </div>
     </AdminShell>
   )
+}
+
+type KycDocument = {
+  id: number
+  kind: string
+  status: string
+  user?: {
+    name: string
+    email: string
+    role: string
+    division: string
+  }
+}
+
+const kindLabel: Record<string, string> = {
+  nic: 'NIC',
+  passport: 'Passport',
+  driving_licence: 'Driving licence',
 }
 
 function Stat({ label, value }: { label: string; value: number | string }) {

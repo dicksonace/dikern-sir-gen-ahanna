@@ -237,10 +237,10 @@ class _StudentHomeState extends State<_StudentHome> {
           final practice = PracticeScope.maybeOf(context);
           final law = user?.isLaw == true;
           if ((!law && scope?.ready != true) || (law && practice?.ready != true)) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton.home();
           }
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton.home();
           }
           if (snap.hasError) {
             return Center(child: Padding(
@@ -353,16 +353,14 @@ class _StudentHomeState extends State<_StudentHome> {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
                 sliver: SliverToBoxAdapter(
-                  child: Transform.translate(
-                    offset: const Offset(0, -18),
-                    child: Column(
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SectionTitle(
                           law ? 'Upcoming consultation' : 'Upcoming live lesson',
-                          subtitle: law ? 'Booked with a lawyer or counsel' : 'From /api/lessons',
+                          subtitle: law ? 'Booked with a lawyer or counsel' : 'Scheduled with your tutor',
                         ),
                         const SizedBox(height: 12),
                         if (upcoming.isEmpty)
@@ -487,7 +485,7 @@ class _StudentHomeState extends State<_StudentHome> {
                           ),
                         ],
                         const SizedBox(height: 18),
-                        SectionTitle(law ? 'Recent questions' : 'Recent support', subtitle: 'From /api/questions'),
+                        SectionTitle(law ? 'Recent questions' : 'Recent support', subtitle: law ? 'Advice you have asked for' : 'Questions you have sent'),
                         const SizedBox(height: 12),
                         if (data.questions.isEmpty)
                           const EmptyHint('No questions yet.')
@@ -522,7 +520,6 @@ class _StudentHomeState extends State<_StudentHome> {
                     ),
                   ),
                 ),
-              ),
             ],
           );
         },
@@ -541,6 +538,7 @@ class _TutorsTab extends StatefulWidget {
 class _TutorsTabState extends State<_TutorsTab> {
   late Future<List<TutorProfile>> future;
   String? loadedKey;
+  String query = '';
 
   @override
   void initState() {
@@ -597,15 +595,26 @@ class _TutorsTabState extends State<_TutorsTab> {
           future: future,
           builder: (context, snap) {
             if (!snap.hasData) {
-              return const Center(child: CircularProgressIndicator());
+              return const PageSkeleton.list();
             }
-            final tutors = snap.data!;
+            final tutors = snap.data!.where((tutor) => textMatches(query, [
+              tutor.displayName,
+              tutor.subjectLabel,
+              tutor.bio,
+              tutor.user?.roleLabel,
+            ])).toList();
+            final search = AppSearchField(
+              hint: law ? 'Search advisers' : 'Search tutors',
+              onChanged: (value) => setState(() => query = value),
+            );
             if (law) {
               final lawyers = tutors.where((tutor) => tutor.user?.role != 'counsel').toList();
               final counsel = tutors.where((tutor) => tutor.user?.role == 'counsel').toList();
               return ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
+                  search,
+                  const SizedBox(height: 16),
                   const Text(
                     'This is general guidance, not a court filing.',
                     style: TextStyle(color: AppColors.muted),
@@ -637,6 +646,8 @@ class _TutorsTabState extends State<_TutorsTab> {
             return ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                search,
+                const SizedBox(height: 16),
                 if (scope != null && scope.tracks.isNotEmpty) ...[
                   Wrap(
                     spacing: 8,
@@ -763,6 +774,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
   bool loading = true;
   bool submitting = false;
   String? loadedKey;
+  String query = '';
 
   @override
   void didChangeDependencies() {
@@ -836,7 +848,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
     return Scaffold(
       appBar: AppBar(title: Text(law ? 'Ask for advice' : 'Instant question')),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const PageSkeleton.list()
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
@@ -852,7 +864,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                       Text(
                         law
                             ? 'General guidance on ${area?.name ?? 'this practice area'}. Not a court filing.'
-                            : 'Posts to POST /api/questions',
+                            : 'Your tutor replies here.',
                         style: const TextStyle(color: AppColors.muted),
                       ),
                       const SizedBox(height: 14),
@@ -904,7 +916,12 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                 const SizedBox(height: 20),
                 const SectionTitle('Your questions'),
                 const SizedBox(height: 12),
-                ...questions.map((q) => Padding(
+                AppSearchField(
+                  hint: 'Search your questions',
+                  onChanged: (value) => setState(() => query = value),
+                ),
+                const SizedBox(height: 12),
+                ...questions.where((q) => textMatches(query, [q.body, q.subject?.name, q.status])).map((q) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: SoftCard(
                         child: Column(
@@ -947,6 +964,7 @@ class _PackagesTab extends StatefulWidget {
 
 class _PackagesTabState extends State<_PackagesTab> {
   late Future<List<PackageModel>> future;
+  String query = '';
 
   @override
   void initState() {
@@ -962,11 +980,16 @@ class _PackagesTabState extends State<_PackagesTab> {
       body: FutureBuilder(
         future: future,
         builder: (context, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final packages = snap.data!;
+          if (!snap.hasData) return const PageSkeleton.list();
+          final packages = snap.data!.where((package) => textMatches(query, [package.name, package.description])).toList();
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              AppSearchField(
+                hint: 'Search packages',
+                onChanged: (value) => setState(() => query = value),
+              ),
+              const SizedBox(height: 16),
               SoftCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

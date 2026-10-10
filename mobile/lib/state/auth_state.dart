@@ -32,11 +32,42 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(String email, String password) async {
+  Future<Map<String, dynamic>> register({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? phone,
+  }) async {
     error = null;
     notifyListeners();
     try {
-      final data = await api.login(email.trim(), password);
+      final data = await api.register(
+        name: name.trim(),
+        email: email.trim(),
+        password: password,
+        role: role,
+        phone: phone,
+      );
+      if (data['token'] is String && data['user'] is Map<String, dynamic>) {
+        user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', data['token'] as String);
+      }
+      notifyListeners();
+      return data;
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> login(String email, String password, {required String division}) async {
+    error = null;
+    notifyListeners();
+    try {
+      final data = await api.login(email.trim(), password, division: division);
       user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', data['token'] as String);

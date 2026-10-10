@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminWebController;
+use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -11,6 +12,8 @@ Route::get('/', function () {
         'admin' => url('/admin/login'),
     ]);
 });
+
+Route::get('/email/verify', [AuthController::class, 'verifyEmailPage'])->name('email.verify');
 
 Route::get('/admin/login', [AdminWebController::class, 'showLogin'])->name('admin.login');
 Route::post('/admin/login', [AdminWebController::class, 'login'])->name('admin.login.submit');

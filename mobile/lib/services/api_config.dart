@@ -2,10 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// Local Laravel API. Android emulator reaches this Mac through 10.0.2.2.
+/// Live Sir API on the Adikern Hostinger account.
+/// Android emulator reaches this Mac through 10.0.2.2 when [useLiveApi] is false.
 class ApiConfig {
-  static const bool useLiveApi = false;
-  static const String liveHost = 'https://marriageplan.site/lms';
+  static const bool useLiveApi = true;
+  static const String liveHost = 'https://adikern.com/sir';
 
   static String get baseUrl => '$assetBaseUrl/api';
 

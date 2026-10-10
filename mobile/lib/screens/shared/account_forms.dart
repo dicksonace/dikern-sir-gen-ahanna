@@ -203,9 +203,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 }
 
 class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key, this.initialEmail = ''});
+  const ForgotPasswordScreen({super.key, this.initialEmail = '', this.division = 'tutor'});
 
   final String initialEmail;
+  final String division;
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -239,7 +240,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _send() async {
     setState(() => sending = true);
     try {
-      final resetCode = await context.read<ApiClient>().forgotPassword(email.text.trim());
+      final resetCode = await context.read<ApiClient>().forgotPassword(email.text.trim(), division: widget.division);
       if (!mounted) return;
       setState(() {
         codeSent = true;
@@ -263,6 +264,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       await context.read<ApiClient>().resetPassword(
             email: email.text.trim(),
+            division: widget.division,
             code: code.text.trim(),
             password: password.text,
           );
@@ -288,6 +290,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Text(
+                  widget.division == 'law'
+                      ? 'This resets the Law advice account for this email.'
+                      : 'This resets the Learning account for this email.',
+                  style: const TextStyle(height: 1.35),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: email,
                   decoration: const InputDecoration(labelText: 'Email'),

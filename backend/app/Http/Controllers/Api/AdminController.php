@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\IdentityDocument;
 use App\Models\Lesson;
 use App\Models\Payment;
 use App\Models\Question;
@@ -59,6 +60,7 @@ class AdminController extends Controller
                 'counsel' => User::where('role', 'counsel')->count(),
             ],
             'pending_profiles' => TutorProfile::where('status', 'pending')->count(),
+            'pending_kyc' => IdentityDocument::where('status', 'pending')->count(),
             'pending_payments' => Payment::where('status', 'pending')->count(),
             'open_questions' => Question::where('status', 'open')->count(),
             'pending' => $pending,

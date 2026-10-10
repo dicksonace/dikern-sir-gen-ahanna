@@ -13,7 +13,7 @@ GoRouter createRouter(AuthState auth) {
     redirect: (context, state) {
       final loggedIn = auth.isLoggedIn;
       final loc = state.matchedLocation;
-      final public = loc == '/' || loc == '/welcome' || loc == '/login';
+      final public = loc == '/' || loc == '/welcome' || loc == '/login' || loc == '/register';
 
       if (auth.booting) return null;
 
@@ -21,7 +21,7 @@ GoRouter createRouter(AuthState auth) {
       if (loc == '/') return null;
 
       if (!loggedIn && !public) return '/welcome';
-      if (loggedIn && (loc == '/welcome' || loc == '/login')) {
+      if (loggedIn && (loc == '/welcome' || loc == '/login' || loc == '/register')) {
         return auth.homeRouteForRole();
       }
       return null;
@@ -30,6 +30,7 @@ GoRouter createRouter(AuthState auth) {
       GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
       GoRoute(path: '/student', builder: (context, state) => const StudentShell()),
       GoRoute(path: '/tutor', builder: (context, state) => const TutorShell()),
       GoRoute(

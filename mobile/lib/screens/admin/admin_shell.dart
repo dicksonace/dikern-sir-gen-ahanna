@@ -70,7 +70,7 @@ class _AdminDashboardState extends State<_AdminDashboard> {
         future: future,
         builder: (context, snap) {
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const PageSkeleton.home();
           }
           final s = snap.data!;
           final stats = [
@@ -102,23 +102,21 @@ class _AdminDashboardState extends State<_AdminDashboard> {
                               icon: const Icon(Icons.logout_rounded, color: Colors.white),
                             ),
                             const Spacer(),
-                            const Text('Admin · live API', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                            const Text('Admin', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
                           ],
                         ),
                         Text('Platform control', style: GoogleFonts.sora(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 6),
-                        Text('Stats from /api/admin/stats', style: TextStyle(color: Colors.white.withValues(alpha: 0.88))),
+                        Text('People, lessons, and payments', style: TextStyle(color: Colors.white.withValues(alpha: 0.88))),
                       ],
                     ),
                   ),
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
                 sliver: SliverToBoxAdapter(
-                  child: Transform.translate(
-                    offset: const Offset(0, -16),
-                    child: GridView.count(
+                  child: GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisCount: 2,
@@ -142,7 +140,6 @@ class _AdminDashboardState extends State<_AdminDashboard> {
                     ),
                   ),
                 ),
-              ),
             ],
           );
         },
@@ -160,6 +157,7 @@ class _PendingTutors extends StatefulWidget {
 
 class _PendingTutorsState extends State<_PendingTutors> {
   late Future<List<TutorProfile>> future;
+  String query = '';
 
   @override
   void initState() {
@@ -176,15 +174,28 @@ class _PendingTutorsState extends State<_PendingTutors> {
         child: FutureBuilder(
           future: future,
           builder: (context, snap) {
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            final list = snap.data!;
-            if (list.isEmpty) {
-              return ListView(children: const [
-                SizedBox(height: 80),
-                Center(child: Text('No pending tutors')),
-              ]);
-            }
-            return ListView.separated(
+            if (!snap.hasData) return const PageSkeleton.list();
+            final list = snap.data!.where((tutor) => textMatches(query, [
+              tutor.displayName,
+              tutor.subjectLabel,
+              tutor.bio,
+            ])).toList();
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: AppSearchField(
+                    hint: 'Search people',
+                    onChanged: (value) => setState(() => query = value),
+                  ),
+                ),
+                Expanded(
+                  child: list.isEmpty
+                      ? ListView(children: const [
+                          SizedBox(height: 80),
+                          Center(child: Text('No pending tutors')),
+                        ])
+                      : ListView.separated(
               padding: const EdgeInsets.all(20),
               itemCount: list.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -238,6 +249,9 @@ class _PendingTutorsState extends State<_PendingTutors> {
                   ),
                 );
               },
+            ),
+                ),
+              ],
             );
           },
         ),
@@ -255,6 +269,7 @@ class _PendingPayments extends StatefulWidget {
 
 class _PendingPaymentsState extends State<_PendingPayments> {
   late Future<List<PaymentModel>> future;
+  String query = '';
 
   @override
   void initState() {
@@ -271,15 +286,28 @@ class _PendingPaymentsState extends State<_PendingPayments> {
         child: FutureBuilder(
           future: future,
           builder: (context, snap) {
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-            final list = snap.data!;
-            if (list.isEmpty) {
-              return ListView(children: const [
-                SizedBox(height: 80),
-                Center(child: Text('No pending payments — subscribe as student to create one')),
-              ]);
-            }
-            return ListView.separated(
+            if (!snap.hasData) return const PageSkeleton.list();
+            final list = snap.data!.where((payment) {
+              final packageName = (payment.subscription?['package'] as Map?)?['name']?.toString();
+              final tutorName = (payment.subscription?['tutor'] as Map?)?['name']?.toString();
+              return textMatches(query, [payment.student?.name, packageName, tutorName, payment.status]);
+            }).toList();
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: AppSearchField(
+                    hint: 'Search payments',
+                    onChanged: (value) => setState(() => query = value),
+                  ),
+                ),
+                Expanded(
+                  child: list.isEmpty
+                      ? ListView(children: const [
+                          SizedBox(height: 80),
+                          Center(child: Text('No pending payments — subscribe as student to create one')),
+                        ])
+                      : ListView.separated(
               padding: const EdgeInsets.all(20),
               itemCount: list.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -321,6 +349,9 @@ class _PendingPaymentsState extends State<_PendingPayments> {
                   ),
                 );
               },
+            ),
+                ),
+              ],
             );
           },
         ),
