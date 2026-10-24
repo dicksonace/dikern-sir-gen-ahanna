@@ -10,6 +10,7 @@ class AuthState extends ChangeNotifier {
   AppUser? user;
   bool booting = true;
   String? error;
+  DateTime? _userFetchedAt;
 
   bool get isLoggedIn => user != null && api.token != null;
 
@@ -22,6 +23,7 @@ class AuthState extends ChangeNotifier {
       api.setToken(token);
       try {
         user = await api.me();
+        _userFetchedAt = DateTime.now();
       } catch (_) {
         await prefs.remove('token');
         api.setToken(null);
@@ -69,6 +71,7 @@ class AuthState extends ChangeNotifier {
     try {
       final data = await api.login(email.trim(), password, division: division);
       user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+      _userFetchedAt = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', data['token'] as String);
       notifyListeners();
@@ -81,7 +84,19 @@ class AuthState extends ChangeNotifier {
 
   void applyUser(AppUser next) {
     user = next;
+    _userFetchedAt = DateTime.now();
     notifyListeners();
+  }
+
+  Future<void> refreshIfStale() async {
+    if (user == null || api.token == null) return;
+    final fetched = _userFetchedAt;
+    if (fetched != null && DateTime.now().difference(fetched) < const Duration(minutes: 5)) return;
+    try {
+      user = await api.me(force: true);
+      _userFetchedAt = DateTime.now();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> logout() async {
@@ -89,6 +104,7 @@ class AuthState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     user = null;
+    _userFetchedAt = null;
     notifyListeners();
   }
 

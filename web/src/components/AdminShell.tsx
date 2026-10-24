@@ -54,7 +54,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="grid min-h-screen grid-cols-[272px_1fr] bg-sand">
       <aside className="sticky top-0 flex h-screen flex-col overflow-y-auto bg-deep px-4 py-5 text-white">
         <div className="flex items-center gap-3 px-2">
-          <img src="/logo.png" alt="" className="h-12 w-12 rounded-2xl object-cover" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-12 w-12 rounded-2xl object-cover" />
           <div className="min-w-0">
             <p className="truncate text-base font-semibold leading-tight">සර් ගෙන් අහන්න</p>
             <p className="mt-0.5 text-xs tracking-wide text-white/60">Admin</p>
@@ -63,13 +63,48 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <nav className="mt-6 flex flex-1 flex-col gap-1 text-sm">
           <Link
             to="/dashboard"
-            aria-current={pathname === '/dashboard' && hash !== '#waiting' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash !== '#waiting' })}
+            aria-current={pathname === '/dashboard' && !dashboardSection(hash) ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && !dashboardSection(hash) })}
           >
             Overview
           </Link>
           <NavGroup label="Learning" base="/learning" items={learning} />
           <NavGroup label="Law advice" base="/law" items={law} />
+          <Link
+            to="/dashboard#profiles"
+            aria-current={pathname === '/dashboard' && hash === '#profiles' ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#profiles' })}
+          >
+            Profiles
+          </Link>
+          <Link
+            to="/dashboard#questions"
+            aria-current={pathname === '/dashboard' && hash === '#questions' ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#questions' })}
+          >
+            Questions
+          </Link>
+          <Link
+            to="/dashboard#lessons"
+            aria-current={pathname === '/dashboard' && hash === '#lessons' ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#lessons' })}
+          >
+            Lessons
+          </Link>
+          <Link
+            to="/dashboard#accounts"
+            aria-current={pathname === '/dashboard' && hash === '#accounts' ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#accounts' })}
+          >
+            Students
+          </Link>
+          <Link
+            to="/dashboard#payments"
+            aria-current={pathname === '/dashboard' && hash === '#payments' ? 'page' : undefined}
+            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#payments' })}
+          >
+            Payments
+          </Link>
           <Link
             to="/dashboard#waiting"
             aria-current={pathname === '/dashboard' && hash === '#waiting' ? 'page' : undefined}
@@ -125,6 +160,10 @@ function NavGroup({ label, base, items }: { label: string; base: string; items: 
       ) : null}
     </div>
   )
+}
+
+function dashboardSection(hash: string) {
+  return ['#profiles', '#questions', '#lessons', '#accounts', '#payments', '#waiting'].includes(hash)
 }
 
 function linkClass({ isActive }: { isActive: boolean }) {

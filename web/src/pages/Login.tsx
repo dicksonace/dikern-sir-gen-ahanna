@@ -32,7 +32,7 @@ export function LoginPage() {
     <main className="grid min-h-screen bg-sand lg:grid-cols-2">
       <section className="hidden flex-col justify-between bg-deep p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="" className="h-14 w-14 rounded-2xl" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-14 w-14 rounded-2xl" />
           <div>
             <p className="text-lg font-semibold">සර් ගෙන් අහන්න</p>
             <p className="text-sm text-white/65">Admin</p>
@@ -46,7 +46,7 @@ export function LoginPage() {
       </section>
       <section className="grid place-items-center px-4 py-16">
         <form onSubmit={onSubmit} className="w-full max-w-md rounded-3xl border border-line bg-white p-8">
-          <img src="/logo.png" alt="" className="h-14 w-14 rounded-2xl lg:hidden" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-14 w-14 rounded-2xl lg:hidden" />
           <p className="mt-4 text-sm font-semibold text-teal lg:mt-0">සර් ගෙන් අහන්න</p>
           <h1 className="mt-1 text-3xl font-semibold">Admin sign in</h1>
           <p className="mt-2 text-sm text-muted">Use the website account. App passwords stay on the phone.</p>

@@ -244,14 +244,30 @@ class QuestionReply {
   final int id;
   final String type;
   final String? content;
+  final String? attachmentUrl;
+  final String? attachmentKind;
+  final DateTime? createdAt;
+  final AppUser? tutor;
 
-  const QuestionReply({required this.id, required this.type, this.content});
+  const QuestionReply({
+    required this.id,
+    required this.type,
+    this.content,
+    this.attachmentUrl,
+    this.attachmentKind,
+    this.createdAt,
+    this.tutor,
+  });
 
   factory QuestionReply.fromJson(Map<String, dynamic> json) {
     return QuestionReply(
       id: json['id'] as int,
       type: json['type'] as String? ?? 'text',
       content: json['content'] as String?,
+      attachmentUrl: json['attachment_url'] as String?,
+      attachmentKind: json['attachment_kind'] as String?,
+      createdAt: json['created_at'] != null ? DateTime.tryParse('${json['created_at']}') : null,
+      tutor: json['tutor'] is Map<String, dynamic> ? AppUser.fromJson(json['tutor'] as Map<String, dynamic>) : null,
     );
   }
 }
@@ -260,7 +276,12 @@ class QuestionModel {
   final int id;
   final String body;
   final String status;
+  final int? studentId;
+  final int? tutorId;
   final String? attachmentPath;
+  final String? attachmentUrl;
+  final String? attachmentKind;
+  final DateTime? createdAt;
   final Subject? subject;
   final AppUser? student;
   final AppUser? tutor;
@@ -270,7 +291,12 @@ class QuestionModel {
     required this.id,
     required this.body,
     required this.status,
+    this.studentId,
+    this.tutorId,
     this.attachmentPath,
+    this.attachmentUrl,
+    this.attachmentKind,
+    this.createdAt,
     this.subject,
     this.student,
     this.tutor,
@@ -282,7 +308,12 @@ class QuestionModel {
       id: json['id'] as int,
       body: json['body'] as String? ?? '',
       status: json['status'] as String? ?? 'open',
+      studentId: json['student_id'] as int?,
+      tutorId: json['tutor_id'] as int?,
       attachmentPath: json['attachment_path'] as String?,
+      attachmentUrl: json['attachment_url'] as String?,
+      attachmentKind: json['attachment_kind'] as String?,
+      createdAt: json['created_at'] != null ? DateTime.tryParse('${json['created_at']}') : null,
       subject: json['subject'] is Map<String, dynamic>
           ? Subject.fromJson(json['subject'] as Map<String, dynamic>)
           : null,

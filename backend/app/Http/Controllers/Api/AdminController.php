@@ -42,10 +42,13 @@ class AdminController extends Controller
 
     public function overview()
     {
-        $pending = TutorProfile::with('user:id,name,email,role,division')
+        $pending = TutorProfile::query()
+            ->with([
+                'user:id,name,email,role,division',
+                'user.identityDocument' => fn ($query) => $query->forAccount(),
+            ])
             ->where('status', 'pending')
-            ->latest()
-            ->limit(8)
+            ->latest('id')
             ->get();
 
         return response()->json([
@@ -66,6 +69,20 @@ class AdminController extends Controller
             'pending' => $pending,
             'charts' => $this->charts(),
         ]);
+    }
+
+    public function profiles()
+    {
+        return TutorProfile::query()->forAdminDirectory()->get();
+    }
+
+    public function accounts()
+    {
+        return User::query()
+            ->select(['id', 'name', 'email', 'phone', 'role', 'division'])
+            ->whereIn('role', ['student', 'client'])
+            ->latest('id')
+            ->get();
     }
 
     protected function charts(): array

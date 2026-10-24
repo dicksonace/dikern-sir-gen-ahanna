@@ -183,6 +183,8 @@ class _IdentityCard extends StatefulWidget {
 class _IdentityCardState extends State<_IdentityCard> {
   String kind = 'nic';
   bool sending = false;
+  String? pickedPath;
+  String? pickedName;
 
   static const kinds = [
     ('nic', 'NIC'),
@@ -190,7 +192,7 @@ class _IdentityCardState extends State<_IdentityCard> {
     ('driving_licence', 'Driving licence'),
   ];
 
-  Future<void> _upload() async {
+  Future<void> _choose() async {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
@@ -199,6 +201,15 @@ class _IdentityCardState extends State<_IdentityCard> {
     final file = picked?.files.single;
     final path = file?.path;
     if (path == null || !mounted) return;
+    setState(() {
+      pickedPath = path;
+      pickedName = file?.name ?? 'document';
+    });
+  }
+
+  Future<void> _send() async {
+    final path = pickedPath;
+    if (path == null) return;
     final api = context.read<ApiClient>();
     final auth = context.read<AuthState>();
     setState(() => sending = true);
@@ -206,12 +217,16 @@ class _IdentityCardState extends State<_IdentityCard> {
       final updated = await api.uploadIdentity(
             kind: kind,
             path: path,
-            filename: file?.name ?? 'identity',
+            filename: pickedName ?? 'identity',
           );
       if (!mounted) return;
       auth.applyUser(updated);
+      setState(() {
+        pickedPath = null;
+        pickedName = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Document sent. An admin will check it, and we emailed you.')),
+        const SnackBar(content: Text('Document sent. An admin will check it.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -260,16 +275,32 @@ class _IdentityCardState extends State<_IdentityCard> {
                 ),
             ],
           ),
+          if (pickedPath != null) ...[
+            const SizedBox(height: 12),
+            Text(pickedName ?? 'Selected document', style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text('Check this is the right file, then send it.'),
+          ],
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: sending || status == 'approved' ? null : _upload,
-              child: sending
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(status == null || status == 'rejected' ? 'Upload document' : 'Replace document'),
+            child: OutlinedButton(
+              onPressed: sending || status == 'approved' ? null : _choose,
+              child: Text(pickedPath == null ? 'Choose document' : 'Choose a different file'),
             ),
           ),
+          if (pickedPath != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: sending ? null : _send,
+                child: sending
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Send document'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -332,11 +363,20 @@ class _AboutCard extends StatelessWidget {
                 ),
               ),
               StatusPill(
-                status[0].toUpperCase() + status.substring(1),
+                status == 'pending' ? 'Waiting for approval' : status[0].toUpperCase() + status.substring(1),
                 color: approved ? AppColors.teal : AppColors.amber,
               ),
             ],
           ),
+          if (!approved) ...[
+            const SizedBox(height: 12),
+            Text(
+              status == 'rejected'
+                  ? 'An admin did not approve this profile.'
+                  : 'Waiting for admin approval. People cannot find you until an admin approves this profile.',
+              style: TextStyle(height: 1.4, color: muted, fontWeight: FontWeight.w700),
+            ),
+          ],
           if ((profile.bio ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(profile.bio!.trim(), style: TextStyle(height: 1.4, color: muted)),

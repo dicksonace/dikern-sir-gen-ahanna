@@ -44,7 +44,7 @@ class SirGenAhannaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider.value(value: api),
+        ChangeNotifierProvider.value(value: api),
         ChangeNotifierProvider.value(value: auth),
         ChangeNotifierProvider.value(value: settings),
       ],

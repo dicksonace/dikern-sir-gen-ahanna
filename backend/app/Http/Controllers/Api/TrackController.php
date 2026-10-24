@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
 use App\Models\Track;
+use App\Support\ReadCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -31,6 +32,7 @@ class TrackController extends Controller
         ]);
 
         $track->update($data);
+        ReadCache::bump('catalog');
 
         return $track->fresh()->load('subjects');
     }
@@ -54,6 +56,7 @@ class TrackController extends Controller
             'slug' => $slug,
             'division' => 'tutor',
         ]);
+        ReadCache::bump('catalog');
 
         return response()->json($subject, 201);
     }
@@ -66,6 +69,7 @@ class TrackController extends Controller
         ]);
 
         $subject->update($data);
+        ReadCache::bump('catalog');
 
         return $subject->fresh();
     }

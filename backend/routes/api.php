@@ -43,6 +43,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/questions', [PlatformController::class, 'questions']);
     Route::post('/questions', [PlatformController::class, 'askQuestion']);
+    Route::get('/questions/{id}', [PlatformController::class, 'showQuestion']);
+    Route::post('/questions/{id}/close', [PlatformController::class, 'closeQuestion']);
+    Route::get('/questions/{id}/file', [PlatformController::class, 'questionFile']);
+    Route::get('/questions/{id}/replies/{reply}/file', [PlatformController::class, 'replyFile']);
     Route::post('/questions/{id}/reply', [PlatformController::class, 'replyQuestion']);
 
     Route::post('/points', [PlatformController::class, 'givePoint']);
@@ -50,6 +54,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/overview', [AdminController::class, 'overview']);
+        Route::get('/profiles', [AdminController::class, 'profiles']);
+        Route::get('/accounts', [AdminController::class, 'accounts']);
+        Route::get('/questions', [PlatformController::class, 'adminQuestions']);
+        Route::post('/questions/{id}/close', [PlatformController::class, 'adminCloseQuestion']);
+        Route::get('/questions/{id}/file', [PlatformController::class, 'adminQuestionFile']);
+        Route::get('/questions/{id}/replies/{reply}/file', [PlatformController::class, 'adminReplyFile']);
+        Route::get('/lessons', [PlatformController::class, 'adminLessons']);
         Route::get('/tracks', [TrackController::class, 'index']);
         Route::put('/tracks/{track}', [TrackController::class, 'update']);
         Route::post('/tracks/{track}/subjects', [TrackController::class, 'storeSubject']);
@@ -62,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/pending-tutors', [PlatformController::class, 'pendingTutors']);
         Route::post('/tutors/{id}/approve', [PlatformController::class, 'approveTutor']);
         Route::get('/pending-payments', [PlatformController::class, 'pendingPayments']);
+        Route::get('/payments/{id}/file', [PlatformController::class, 'paymentFile']);
         Route::post('/payments/{id}/verify', [PlatformController::class, 'verifyPayment']);
     });
 });

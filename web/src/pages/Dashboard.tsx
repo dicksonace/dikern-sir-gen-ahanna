@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, getToken, type Overview } from '../api'
+import { api, apiRoot, getToken, type Overview, type TeacherProfile } from '../api'
 import { useAuth } from '../auth'
 import { AdminShell } from '../components/AdminShell'
 
@@ -19,43 +19,83 @@ export function DashboardPage() {
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [kyc, setKyc] = useState<KycDocument[]>([])
+  const [profiles, setProfiles] = useState<TeacherProfile[]>([])
+  const [payments, setPayments] = useState<PaymentReview[]>([])
+  const [questions, setQuestions] = useState<QuestionRow[]>([])
+  const [lessons, setLessons] = useState<LessonRow[]>([])
+  const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [notes, setNotes] = useState<Record<number, string>>({})
+  const [rowNote, setRowNote] = useState<Record<number, string>>({})
+  const [preview, setPreview] = useState<{ url: string; type: string; title: string } | null>(null)
 
-  async function load() {
-    setError('')
+  function closePreview() {
+    setPreview((current) => {
+      if (current) URL.revokeObjectURL(current.url)
+      return null
+    })
+  }
+
+  async function load(silent = false) {
+    if (!silent) setError('')
     try {
-      const [nextOverview, nextKyc] = await Promise.all([
+      const [nextOverview, nextKyc, nextProfiles, nextPayments, nextQuestions, nextLessons, nextAccounts] = await Promise.all([
         api<Overview>('/admin/overview'),
         api<KycDocument[]>('/admin/kyc'),
+        api<TeacherProfile[]>('/admin/profiles'),
+        api<PaymentReview[]>('/admin/pending-payments'),
+        api<QuestionRow[]>('/admin/questions'),
+        api<LessonRow[]>('/admin/lessons'),
+        api<AccountRow[]>('/admin/accounts'),
       ])
       setOverview(nextOverview)
       setKyc(nextKyc)
+      setProfiles(nextProfiles)
+      setPayments(nextPayments)
+      setQuestions(nextQuestions)
+      setLessons(nextLessons)
+      setAccounts(nextAccounts)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load the dashboard.')
+      if (!silent) {
+        setError(caught instanceof Error ? caught.message : 'Could not load the dashboard.')
+      }
     }
   }
 
   useEffect(() => {
-    if (user) {
-      void load()
+    if (!user) return
+    void load()
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load(true)
+    }, 15000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load(true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [user])
 
   async function approve(id: number) {
     setBusyId(`profile-${id}`)
+    setRowNote((current) => ({ ...current, [id]: '' }))
+    setError('')
     try {
       await api(`/admin/tutors/${id}/approve`, { method: 'POST' })
       await load()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not approve.')
+      const message = caught instanceof Error ? caught.message : 'Could not approve.'
+      setRowNote((current) => ({ ...current, [id]: message }))
     } finally {
       setBusyId(null)
     }
   }
 
-  async function openDocument(id: number) {
+  async function openPrivateFile(path: string, title: string) {
     const token = getToken()
-    const response = await fetch(`/api/admin/kyc/${id}/file`, {
+    const response = await fetch(`${apiRoot()}/api${path}`, {
+      cache: 'no-store',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (!response.ok) {
@@ -63,7 +103,36 @@ export function DashboardPage() {
       return
     }
     const blob = await response.blob()
-    window.open(URL.createObjectURL(blob), '_blank', 'noopener')
+    setPreview((current) => {
+      if (current) URL.revokeObjectURL(current.url)
+      return { url: URL.createObjectURL(blob), type: blob.type, title }
+    })
+  }
+
+  async function verifyPayment(id: number) {
+    setBusyId(`payment-${id}`)
+    setError('')
+    try {
+      await api(`/admin/payments/${id}/verify`, { method: 'POST' })
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not mark that payment as received.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function closeQuestion(id: number) {
+    setBusyId(`question-${id}`)
+    setError('')
+    try {
+      await api(`/admin/questions/${id}/close`, { method: 'POST' })
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not close that question.')
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function decideKyc(id: number, decision: 'approve' | 'reject') {
@@ -175,6 +244,65 @@ export function DashboardPage() {
           </div>
         </div>
 
+        <section id="profiles" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Teacher profiles</h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted">
+                Every tutor, lecturer, lawyer, and counsel, including people still waiting. The track pages only list people you have already approved. This list refreshes on its own.
+              </p>
+            </div>
+            <button type="button" onClick={() => void load()} className="rounded-xl border border-line px-3 py-2 text-sm font-semibold">
+              Refresh
+            </button>
+          </div>
+          {profiles.length === 0 ? <p className="mt-4 text-sm text-muted">No teacher profiles yet.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {profiles.map((profile) => {
+              const person = profile.user
+              const identity = person?.identity_document
+              const initial = person?.name?.slice(0, 1).toUpperCase() || '?'
+              const side = person?.division === 'law' ? 'Law advice' : 'Learning'
+              const details = [profile.qualifications, profile.experience].filter(Boolean).join(' · ')
+              return (
+                <li key={profile.id} className="rounded-2xl border border-line p-4">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-semibold text-teal">
+                      {initial}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{person?.name ?? 'Unknown'}</p>
+                      <p className="text-sm text-muted">
+                        {side} · {roleLabel[person?.role ?? ''] ?? person?.role}
+                        {person?.phone ? ` · ${person.phone}` : ''}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold">{statusLabel[profile.status] ?? profile.status}</span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6">{profile.bio?.trim() || 'No about text yet.'}</p>
+                  {details ? <p className="mt-1 text-sm text-muted">{details}</p> : null}
+                  {profile.subjects && profile.subjects.length > 0 ? (
+                    <p className="mt-1 text-sm text-muted">{profile.subjects.map((subject) => subject.name).join(' · ')}</p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <p className="text-sm text-muted">{identityLabel[identity?.status ?? ''] ?? 'No identity document yet.'}</p>
+                    {identity ? (
+                      <button
+                        type="button"
+                        onClick={() => void openPrivateFile(`/admin/kyc/${identity.id}/file`, person?.name ?? 'Identity document')}
+                        className="rounded-xl border border-line px-3 py-2 text-sm font-semibold"
+                      >
+                        Open document
+                      </button>
+                    ) : null}
+                  </div>
+                  {identity?.status === 'rejected' && identity.note ? <p className="mt-2 text-sm text-muted">{identity.note}</p> : null}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+
         <section id="identity" className="mt-6 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Identity documents</h2>
           <p className="mt-1 text-sm text-muted">People upload a NIC, passport, or driving licence. Approve it here before you approve their profile.</p>
@@ -192,7 +320,7 @@ export function DashboardPage() {
                         {side} · {roleLabel[person?.role ?? ''] ?? person?.role} · {kindLabel[document.kind] ?? document.kind}
                       </p>
                     </div>
-                    <button type="button" onClick={() => void openDocument(document.id)} className="rounded-xl border border-line px-3 py-2 text-sm font-semibold">
+                    <button type="button" onClick={() => void openPrivateFile(`/admin/kyc/${document.id}/file`, person?.name ?? 'Identity document')} className="rounded-xl border border-line px-3 py-2 text-sm font-semibold">
                       Open file
                     </button>
                     <button
@@ -226,6 +354,153 @@ export function DashboardPage() {
           </ul>
         </section>
 
+        <section id="payments" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <h2 className="text-xl font-semibold">Payments to check</h2>
+          <p className="mt-1 text-sm text-muted">Bank slips sent from the app. Open the slip, then mark the payment as received.</p>
+          {payments.length === 0 ? <p className="mt-4 text-sm text-muted">No payments are waiting.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {payments.map((payment) => {
+              const person = payment.student
+              const packageName = payment.subscription?.package?.name ?? 'Package'
+              const tutorName = payment.subscription?.tutor?.name ?? 'Teacher'
+              const amount = Math.round(Number(payment.amount)).toLocaleString()
+              return (
+                <li key={payment.id} className="rounded-2xl border border-line p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">{person?.name ?? 'Unknown'} · Rs {amount}</p>
+                      <p className="text-sm text-muted">{packageName} · {tutorName}</p>
+                    </div>
+                    {payment.has_slip ? (
+                      <button
+                        type="button"
+                        onClick={() => void openPrivateFile(`/admin/payments/${payment.id}/file`, `${person?.name ?? 'Payment'} slip`)}
+                        className="rounded-xl border border-line px-3 py-2 text-sm font-semibold"
+                      >
+                        Open slip
+                      </button>
+                    ) : (
+                      <p className="text-sm text-muted">No slip photo was stored with this one.</p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busyId === `payment-${payment.id}`}
+                      onClick={() => void verifyPayment(payment.id)}
+                      className="rounded-xl bg-teal px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {busyId === `payment-${payment.id}` ? 'Saving…' : 'Mark as received'}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+
+        <section id="questions" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <h2 className="text-xl font-semibold">Questions</h2>
+          <p className="mt-1 text-sm text-muted">What students and clients sent, including a photo or file. Closing a question does not answer it.</p>
+          {questions.length === 0 ? <p className="mt-4 text-sm text-muted">No questions yet.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {questions.map((question) => (
+              <li key={question.id} className="rounded-2xl border border-line p-4">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{question.student?.name ?? 'Unknown'} → {question.tutor?.name ?? 'Teacher'}</p>
+                    <p className="text-sm text-muted">
+                      {question.student?.division === 'law' ? 'Law advice' : 'Learning'}
+                      {question.subject?.name ? ` · ${question.subject.name}` : ''}
+                      {' · '}
+                      {question.status === 'closed' ? 'Closed' : question.status === 'answered' ? 'Answered' : 'Open'}
+                    </p>
+                  </div>
+                  {question.has_attachment ? (
+                    <button
+                      type="button"
+                      onClick={() => void openPrivateFile(`/admin/questions/${question.id}/file`, `${question.student?.name ?? 'Question'} file`)}
+                      className="rounded-xl border border-line px-3 py-2 text-sm font-semibold"
+                    >
+                      Open file
+                    </button>
+                  ) : null}
+                  {question.status !== 'closed' ? (
+                    <button
+                      type="button"
+                      disabled={busyId === `question-${question.id}`}
+                      onClick={() => void closeQuestion(question.id)}
+                      className="rounded-xl border border-line px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                    >
+                      {busyId === `question-${question.id}` ? 'Closing…' : 'Close'}
+                    </button>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm leading-6">{question.body?.trim() || 'No written question. The file is the message.'}</p>
+                {question.replies && question.replies.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {question.replies.map((reply) => (
+                      <li key={reply.id} className="rounded-xl bg-sand px-3 py-2 text-sm">
+                        <p className="font-semibold">{reply.tutor?.name ?? 'Reply'}</p>
+                        <p className="mt-1 leading-6">{reply.content}</p>
+                        {reply.has_attachment ? (
+                          <button
+                            type="button"
+                            onClick={() => void openPrivateFile(`/admin/questions/${question.id}/replies/${reply.id}/file`, 'Reply file')}
+                            className="mt-2 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-semibold"
+                          >
+                            Open reply file
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section id="lessons" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <h2 className="text-xl font-semibold">Lessons</h2>
+          <p className="mt-1 text-sm text-muted">Booked lessons and consultations.</p>
+          {lessons.length === 0 ? <p className="mt-4 text-sm text-muted">No lessons yet.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {lessons.map((lesson) => (
+              <li key={lesson.id} className="rounded-2xl border border-line p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{lesson.title}</p>
+                    <p className="text-sm text-muted">
+                      {lesson.student?.name ?? 'Student'} · {lesson.tutor?.name ?? 'Teacher'}
+                      {lesson.scheduled_at ? ` · ${new Date(lesson.scheduled_at).toLocaleString()}` : ''}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold capitalize">{lesson.status}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section id="accounts" className="mt-6 rounded-3xl border border-line bg-white p-6">
+          <h2 className="text-xl font-semibold">Students and clients</h2>
+          <p className="mt-1 text-sm text-muted">People who learn or ask for advice. Teachers stay in Profiles.</p>
+          {accounts.length === 0 ? <p className="mt-4 text-sm text-muted">No student or client accounts yet.</p> : null}
+          <ul className="mt-4 space-y-3">
+            {accounts.map((account) => (
+              <li key={account.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{account.name}</p>
+                  <p className="text-sm text-muted">
+                    {account.division === 'law' ? 'Law advice' : 'Learning'} · {roleLabel[account.role] ?? account.role}
+                    {account.phone ? ` · ${account.phone}` : ''}
+                  </p>
+                  <p className="text-sm text-muted">{account.email}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section id="waiting" className="mt-6 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Waiting for approval</h2>
           <p className="mt-1 text-sm text-muted">Tutors, lecturers, lawyers, and counsel appear here until you approve them.</p>
@@ -238,33 +513,110 @@ export function DashboardPage() {
               const person = profile.user
               const initial = person?.name?.slice(0, 1).toUpperCase() || '?'
               const side = person?.division === 'law' ? 'Law advice' : 'Learning'
+              const identity = person?.identity_document?.status
+              const identityReady = identity === 'approved'
+              const identityNote = identityReady
+                ? ''
+                : identity === 'pending'
+                  ? 'Their identity document is in the list above. Approve that document first, then approve this profile.'
+                  : identity === 'rejected'
+                    ? 'Their last identity document was not accepted. They need to upload another one before this profile can be approved.'
+                    : 'They have not uploaded an identity document yet. The profile can be approved after that document is approved.'
               return (
-                <li key={profile.id} className="flex items-center gap-3 rounded-2xl border border-line p-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-semibold text-teal">
-                    {initial}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-semibold">{person?.name ?? 'Unknown'}</p>
-                    <p className="text-sm text-muted">
-                      {side} · {roleLabel[person?.role ?? ''] ?? person?.role}
-                    </p>
+                <li key={profile.id} className="rounded-2xl border border-line p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-semibold text-teal">
+                      {initial}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold">{person?.name ?? 'Unknown'}</p>
+                      <p className="text-sm text-muted">
+                        {side} · {roleLabel[person?.role ?? ''] ?? person?.role}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!identityReady || busyId === `profile-${profile.id}`}
+                      onClick={() => void approve(profile.id)}
+                      className="ml-auto rounded-xl bg-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {busyId === `profile-${profile.id}` ? 'Approving…' : identityReady ? 'Approve' : 'Needs identity first'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={busyId === `profile-${profile.id}`}
-                    onClick={() => void approve(profile.id)}
-                    className="ml-auto rounded-xl bg-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {busyId === `profile-${profile.id}` ? 'Approving…' : 'Approve'}
-                  </button>
+                  {identityNote ? <p className="mt-3 text-sm text-muted">{identityNote}</p> : null}
+                  {rowNote[profile.id] ? <p className="mt-3 text-sm font-semibold text-red-800">{rowNote[profile.id]}</p> : null}
                 </li>
               )
             })}
           </ul>
         </section>
       </div>
+      {preview ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => closePreview()}>
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white p-4" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="font-semibold">{preview.title}</p>
+              <button type="button" onClick={() => closePreview()} className="rounded-xl border border-line px-3 py-2 text-sm font-semibold">
+                Close
+              </button>
+            </div>
+            {preview.type.startsWith('image/') ? (
+              <img src={preview.url} alt="" className="max-h-[70vh] w-full object-contain" />
+            ) : preview.type.startsWith('video/') ? (
+              <video src={preview.url} controls className="max-h-[70vh] w-full" />
+            ) : (
+              <iframe title={preview.title} src={preview.url} className="h-[70vh] w-full rounded-2xl border border-line" />
+            )}
+          </div>
+        </div>
+      ) : null}
     </AdminShell>
   )
+}
+
+type QuestionRow = {
+  id: number
+  body: string | null
+  status: string
+  has_attachment: boolean
+  student?: { name: string; role: string; division: string } | null
+  tutor?: { name: string; role: string } | null
+  subject?: { name: string } | null
+  replies?: Array<{
+    id: number
+    content: string | null
+    has_attachment: boolean
+    tutor?: { name: string } | null
+  }>
+}
+
+type LessonRow = {
+  id: number
+  title: string
+  scheduled_at: string | null
+  status: string
+  student?: { name: string } | null
+  tutor?: { name: string } | null
+}
+
+type AccountRow = {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  role: string
+  division: string
+}
+
+type PaymentReview = {
+  id: number
+  amount: string
+  has_slip: boolean
+  student?: { name: string; email: string } | null
+  subscription?: {
+    package?: { name: string } | null
+    tutor?: { name: string } | null
+  } | null
 }
 
 type KycDocument = {
@@ -283,6 +635,18 @@ const kindLabel: Record<string, string> = {
   nic: 'NIC',
   passport: 'Passport',
   driving_licence: 'Driving licence',
+}
+
+const statusLabel: Record<string, string> = {
+  pending: 'Waiting for approval',
+  approved: 'Approved',
+  rejected: 'Not approved',
+}
+
+const identityLabel: Record<string, string> = {
+  pending: 'Identity document is waiting for a check.',
+  approved: 'Identity document is approved.',
+  rejected: 'Identity document needs another copy.',
 }
 
 function Stat({ label, value }: { label: string; value: number | string }) {

@@ -10,7 +10,7 @@ export function LandingPage() {
     <main className="min-h-screen bg-sand text-ink">
       <div className="mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
-          <img src="/logo.png" alt="" className="h-16 w-16 rounded-2xl" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-16 w-16 rounded-2xl" />
           <p className="mt-6 text-sm font-semibold text-teal">Admin website</p>
           <h1 className="mt-2 text-5xl font-semibold leading-tight">සර් ගෙන් අහන්න</h1>
           <p className="mt-4 max-w-xl text-lg text-muted">

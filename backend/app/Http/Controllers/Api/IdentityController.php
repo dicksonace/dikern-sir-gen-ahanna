@@ -65,7 +65,9 @@ class IdentityController extends Controller
             abort(404);
         }
 
-        return Storage::disk('local')->response($document->path, $document->original_name);
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '_', (string) $document->original_name) ?: 'identity';
+
+        return Storage::disk('local')->response($document->path, $name);
     }
 
     public function approve(Request $request, int $id)

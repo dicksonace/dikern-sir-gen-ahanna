@@ -56,6 +56,7 @@ class _AuthBodyState extends State<_AuthBody> {
   bool loading = false;
   bool hidePassword = true;
   bool awaitingCode = false;
+  String? notice;
 
   static const learningRoles = [
     ('student', 'Student'),
@@ -119,11 +120,9 @@ class _AuthBodyState extends State<_AuthBody> {
           final sent = data['verification_code'];
           setState(() {
             awaitingCode = true;
+            notice = 'We emailed a confirmation code. It expires in 60 minutes. Enter it below.';
             if (sent is String) code.text = sent;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('We emailed a confirmation code. Enter it to finish.')),
-          );
           return;
         }
       } else {
@@ -133,10 +132,13 @@ class _AuthBodyState extends State<_AuthBody> {
       context.go(auth.homeRouteForRole());
     } catch (e) {
       if (!mounted) return;
-      if ('$e'.contains('Confirm your email')) {
-        setState(() => awaitingCode = true);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      final text = '$e';
+      setState(() {
+        notice = text;
+        if (text.contains('email code') || text.contains('not confirmed yet')) {
+          awaitingCode = true;
+        }
+      });
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -157,7 +159,18 @@ class _AuthBodyState extends State<_AuthBody> {
       context.go(context.read<AuthState>().homeRouteForRole());
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      final text = '$e';
+      if (text.contains('already used')) {
+        try {
+          await context.read<AuthState>().login(email.text.trim(), password.text, division: side);
+          if (!mounted) return;
+          context.go(context.read<AuthState>().homeRouteForRole());
+          return;
+        } catch (_) {
+          if (!mounted) return;
+        }
+      }
+      setState(() => notice = text);
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -168,10 +181,10 @@ class _AuthBodyState extends State<_AuthBody> {
     try {
       await context.read<ApiClient>().resendVerification(email: email.text.trim(), division: side);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A new code is on the way.')));
+      setState(() => notice = 'A new code is on the way. It expires in 60 minutes.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      setState(() => notice = '$e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -299,6 +312,10 @@ class _AuthBodyState extends State<_AuthBody> {
                     onSubmitted: (_) => loading ? null : _submit(),
                     decoration: const InputDecoration(labelText: 'Confirm password'),
                   ),
+                ],
+                if (notice != null) ...[
+                  const SizedBox(height: 12),
+                  Text(notice!, style: const TextStyle(color: AppColors.tealDeep, fontWeight: FontWeight.w700, height: 1.35)),
                 ],
                 if (awaitingCode) ...[
                   const SizedBox(height: 12),

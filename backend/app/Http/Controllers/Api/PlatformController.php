@@ -17,58 +17,85 @@ use App\Models\Track;
 use App\Models\TutorProfile;
 use App\Models\User;
 use App\Support\AccountMailer;
+use App\Support\ReadCache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class PlatformController extends Controller
 {
     public function subjects(Request $request)
     {
-        return Subject::query()
-            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
-            ->when($request->filled('track'), function ($query) use ($request) {
-                $slug = $request->string('track')->toString();
-                $query->whereHas('track', fn ($q) => $q->where('slug', $slug));
-            })
-            ->orderBy('name')
-            ->get();
+        $division = $this->division($request) ?? 'all';
+        $track = $request->string('track')->toString() ?: 'all';
+
+        return ReadCache::remember('catalog', "subjects.$division.$track", 600, function () use ($request) {
+            return Subject::query()
+                ->select(['id', 'name', 'slug', 'icon', 'color', 'division', 'track_id'])
+                ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+                ->when($request->filled('track'), function ($query) use ($request) {
+                    $slug = $request->string('track')->toString();
+                    $query->whereHas('track', fn ($q) => $q->where('slug', $slug));
+                })
+                ->orderBy('name')
+                ->get();
+        });
     }
 
     public function tracks(Request $request)
     {
-        return Track::query()
-            ->with('subjects')
-            ->where('is_active', true)
-            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
+        $division = $this->division($request) ?? 'all';
+
+        return ReadCache::remember('catalog', "tracks.$division", 600, function () use ($request) {
+            return Track::query()
+                ->with('subjects:id,track_id,name,slug,icon,color')
+                ->where('is_active', true)
+                ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get();
+        });
     }
 
     public function packages(Request $request)
     {
-        return Package::query()
-            ->where('is_active', true)
-            ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
-            ->orderBy('price')
-            ->get();
+        $division = $this->division($request) ?? 'all';
+
+        return ReadCache::remember('catalog', "packages.$division", 600, function () use ($request) {
+            return Package::query()
+                ->select(['id', 'name', 'description', 'price', 'weekly_hours', 'division', 'is_active'])
+                ->where('is_active', true)
+                ->when($this->division($request), fn ($q, $division) => $q->where('division', $division))
+                ->orderBy('price')
+                ->get();
+        });
     }
 
     public function tutors(Request $request)
     {
-        $query = TutorProfile::with(['user', 'subjects'])
-            ->where('status', 'approved');
+        $division = $this->division($request) ?? 'all';
+        $subject = $request->string('subject')->toString() ?: 'all';
 
-        if ($division = $this->division($request)) {
-            $query->whereHas('user', fn ($q) => $q->where('division', $division));
-        }
+        return ReadCache::remember('tutors', "$division.$subject", 60, function () use ($request, $division) {
+            $query = TutorProfile::query()
+                ->select(['id', 'user_id', 'bio', 'qualifications', 'experience', 'satisfaction_points', 'status', 'available_slots', 'commission_rate'])
+                ->with([
+                    'user:id,name,role,division',
+                    'subjects:id,name,slug,icon,color',
+                ])
+                ->where('status', 'approved');
 
-        if ($request->filled('subject')) {
-            $slug = $request->string('subject');
-            $query->whereHas('subjects', fn ($q) => $q->where('slug', $slug));
-        }
+            if ($division !== 'all') {
+                $query->whereHas('user', fn ($q) => $q->where('division', $division));
+            }
 
-        return $query->orderByDesc('satisfaction_points')->get();
+            if ($request->filled('subject')) {
+                $slug = $request->string('subject');
+                $query->whereHas('subjects', fn ($q) => $q->where('slug', $slug));
+            }
+
+            return $query->orderByDesc('satisfaction_points')->get();
+        });
     }
 
     public function tutorShow(int $id)
@@ -83,10 +110,18 @@ class PlatformController extends Controller
         $data = $request->validate([
             'tutor_id' => 'required|exists:users,id',
             'package_id' => 'required|exists:packages,id',
+            'slip' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
             'slip_note' => 'nullable|string|max:255',
         ]);
 
         $package = Package::findOrFail($data['package_id']);
+        $slipPath = $data['slip_note'] ?? null;
+
+        if ($request->hasFile('slip')) {
+            $file = $request->file('slip');
+            $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $file->getClientOriginalName()) ?: 'slip';
+            $slipPath = $file->storeAs('slips/'.$request->user()->id, now()->format('YmdHis').'-'.$safeName, 'local');
+        }
 
         $subscription = Subscription::create([
             'student_id' => $request->user()->id,
@@ -100,13 +135,16 @@ class PlatformController extends Controller
             'student_id' => $request->user()->id,
             'amount' => $package->price,
             'method' => 'bank_transfer',
-            'slip_path' => $data['slip_note'] ?? 'prototype-slip.jpg',
+            'slip_path' => $slipPath,
             'status' => 'pending',
         ]);
 
+        $subscription->load(['package', 'tutor', 'payment']);
+        $subscription->payment?->makeHidden('slip_path');
+
         return response()->json([
-            'subscription' => $subscription->load(['package', 'tutor', 'payment']),
-            'payment' => $payment,
+            'subscription' => $subscription,
+            'payment' => $payment->makeHidden('slip_path'),
             'message' => 'Bank transfer submitted. Admin will verify shortly.',
         ], 201);
     }
@@ -122,7 +160,9 @@ class PlatformController extends Controller
     public function lessons(Request $request)
     {
         $user = $request->user();
-        $query = Lesson::with(['student', 'tutor']);
+        $query = Lesson::query()
+            ->select(['id', 'student_id', 'tutor_id', 'title', 'scheduled_at', 'duration_minutes', 'tracked_minutes', 'status', 'meeting_room'])
+            ->with(['student:id,name,role', 'tutor:id,name,role']);
         $this->limitToPerson($query, $user, 'student_id', 'tutor_id');
 
         return $query->orderBy('scheduled_at')->get();
@@ -144,11 +184,35 @@ class PlatformController extends Controller
 
     public function questions(Request $request)
     {
-        $user = $request->user();
-        $query = Question::with(['student', 'tutor', 'subject', 'replies']);
-        $this->limitToPerson($query, $user, 'student_id', 'tutor_id');
+        return Question::query()
+            ->listColumns()
+            ->visibleTo($request->user())
+            ->with([
+                'student:id,name,role',
+                'tutor:id,name,role',
+                'subject:id,name,slug',
+                'latestReply.tutor:id,name,role',
+            ])
+            ->latest('id')
+            ->get()
+            ->each
+            ->forInboxList();
+    }
 
-        return $query->latest()->get();
+    public function showQuestion(Request $request, int $id)
+    {
+        return response()->json($this->findVisibleQuestion($request, $id));
+    }
+
+    public function closeQuestion(Request $request, int $id)
+    {
+        $question = $this->findVisibleQuestion($request, $id);
+
+        if ($question->status !== 'closed') {
+            $question->update(['status' => 'closed']);
+        }
+
+        return response()->json($this->findVisibleQuestion($request, $id));
     }
 
     public function askQuestion(Request $request)
@@ -156,16 +220,38 @@ class PlatformController extends Controller
         $data = $request->validate([
             'tutor_id' => 'required|exists:users,id',
             'subject_id' => 'nullable|exists:subjects,id',
-            'body' => 'required|string|max:2000',
-            'attachment_path' => 'nullable|string',
+            'body' => 'nullable|string|max:2000',
+            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:20480',
         ]);
+
+        $body = trim((string) ($data['body'] ?? ''));
+        if ($body === '' && ! $request->hasFile('attachment')) {
+            throw ValidationException::withMessages([
+                'body' => ['Write a question or add a photo or video.'],
+            ]);
+        }
+
+        $paid = Subscription::query()
+            ->where('student_id', $request->user()->id)
+            ->where('tutor_id', $data['tutor_id'])
+            ->where('status', 'active')
+            ->where(function ($query) {
+                $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()->toDateString());
+            })
+            ->exists();
+
+        if (! $paid) {
+            throw ValidationException::withMessages([
+                'tutor_id' => ['You can only ask someone you have an active paid package with.'],
+            ]);
+        }
 
         $question = Question::create([
             'student_id' => $request->user()->id,
             'tutor_id' => $data['tutor_id'],
             'subject_id' => $data['subject_id'] ?? null,
-            'body' => $data['body'],
-            'attachment_path' => $data['attachment_path'] ?? null,
+            'body' => $body !== '' ? $body : 'Attached a file.',
+            'attachment_path' => $this->storeQuestionFile($request, 'questions/'.$request->user()->id),
             'status' => 'open',
         ]);
 
@@ -176,18 +262,34 @@ class PlatformController extends Controller
     {
         $question = Question::findOrFail($id);
 
+        if ((int) $question->tutor_id !== (int) $request->user()->id) {
+            abort(403);
+        }
+
+        if ($question->status === 'closed') {
+            throw ValidationException::withMessages([
+                'status' => ['This question is closed.'],
+            ]);
+        }
+
         $data = $request->validate([
             'type' => 'required|in:text,image,document,video',
             'content' => 'nullable|string',
-            'attachment_path' => 'nullable|string',
+            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:20480',
         ]);
+
+        if ($data['type'] !== 'text' && ! $request->hasFile('attachment')) {
+            throw ValidationException::withMessages([
+                'attachment' => ['Choose the photo, video, or document to send.'],
+            ]);
+        }
 
         $reply = QuestionReply::create([
             'question_id' => $question->id,
             'tutor_id' => $request->user()->id,
             'type' => $data['type'],
             'content' => $data['content'] ?? null,
-            'attachment_path' => $data['attachment_path'] ?? null,
+            'attachment_path' => $this->storeQuestionFile($request, 'replies/'.$question->id),
         ]);
 
         $question->update(['status' => 'answered']);
@@ -253,6 +355,7 @@ class PlatformController extends Controller
         }
 
         $profile->update(['status' => 'approved']);
+        ReadCache::bump('tutors');
         if ($profile->user) {
             AccountMailer::queueProfileApproved($profile->user);
         }
@@ -262,10 +365,24 @@ class PlatformController extends Controller
 
     public function pendingPayments()
     {
-        return Payment::with(['student', 'subscription.package', 'subscription.tutor'])
-            ->where('status', 'pending')
-            ->latest()
-            ->get();
+        return Payment::query()->forAdminReview()->get()->each(function (Payment $payment) {
+            $stored = is_string($payment->slip_path) && Storage::disk('local')->exists($payment->slip_path);
+            $payment->setAttribute('has_slip', $stored);
+            $payment->makeHidden('slip_path');
+        });
+    }
+
+    public function paymentFile(int $id)
+    {
+        $payment = Payment::query()->select(['id', 'slip_path'])->findOrFail($id);
+
+        if (! is_string($payment->slip_path) || ! Storage::disk('local')->exists($payment->slip_path)) {
+            abort(404);
+        }
+
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($payment->slip_path)) ?: 'slip';
+
+        return Storage::disk('local')->response($payment->slip_path, $name);
     }
 
     public function verifyPayment(Request $request, int $id)
@@ -322,6 +439,64 @@ class PlatformController extends Controller
         ]);
     }
 
+    public function adminQuestions()
+    {
+        return Question::query()
+            ->listColumns()
+            ->with([
+                'student:id,name,role,division',
+                'tutor:id,name,role',
+                'subject:id,name',
+                'replies:id,question_id,tutor_id,content,attachment_path,created_at',
+                'replies.tutor:id,name',
+            ])
+            ->latest('id')
+            ->get()
+            ->each(function (Question $question) {
+                $this->markStoredFile($question);
+                $question->replies->each(fn (QuestionReply $reply) => $this->markStoredFile($reply));
+            });
+    }
+
+    public function adminCloseQuestion(int $id)
+    {
+        $question = Question::query()->findOrFail($id);
+        if ($question->status !== 'closed') {
+            $question->update(['status' => 'closed']);
+        }
+
+        return response()->json(['status' => 'closed']);
+    }
+
+    public function adminQuestionFile(int $id)
+    {
+        $question = Question::query()->select(['id', 'attachment_path'])->findOrFail($id);
+
+        return $this->fileResponse($question->attachment_path);
+    }
+
+    public function adminReplyFile(int $id, int $reply)
+    {
+        $row = QuestionReply::query()
+            ->select(['id', 'question_id', 'attachment_path'])
+            ->where('question_id', $id)
+            ->findOrFail($reply);
+
+        return $this->fileResponse($row->attachment_path);
+    }
+
+    public function adminLessons()
+    {
+        return Lesson::query()
+            ->select(['id', 'student_id', 'tutor_id', 'title', 'scheduled_at', 'duration_minutes', 'status'])
+            ->with([
+                'student:id,name',
+                'tutor:id,name',
+            ])
+            ->latest('scheduled_at')
+            ->get();
+    }
+
     public function adminStats()
     {
         return response()->json([
@@ -332,6 +507,74 @@ class PlatformController extends Controller
             'active_subscriptions' => Subscription::where('status', 'active')->count(),
             'open_questions' => Question::where('status', 'open')->count(),
         ]);
+    }
+
+    public function questionFile(Request $request, int $id)
+    {
+        $question = Question::findOrFail($id);
+        $this->ensureQuestionAccess($request->user(), $question);
+
+        return $this->fileResponse($question->attachment_path);
+    }
+
+    public function replyFile(Request $request, int $id, int $reply)
+    {
+        $question = Question::findOrFail($id);
+        $this->ensureQuestionAccess($request->user(), $question);
+        $row = QuestionReply::where('question_id', $question->id)->findOrFail($reply);
+
+        return $this->fileResponse($row->attachment_path);
+    }
+
+    protected function findVisibleQuestion(Request $request, int $id): Question
+    {
+        $question = Question::with([
+            'student:id,name,role',
+            'tutor:id,name,role',
+            'subject:id,name,slug',
+            'replies.tutor:id,name,role',
+        ])->findOrFail($id);
+
+        $this->ensureQuestionAccess($request->user(), $question);
+
+        return $question;
+    }
+
+    protected function ensureQuestionAccess(User $user, Question $question): void
+    {
+        if ((int) $question->student_id === (int) $user->id || (int) $question->tutor_id === (int) $user->id) {
+            return;
+        }
+
+        abort(403);
+    }
+
+    protected function storeQuestionFile(Request $request, string $folder): ?string
+    {
+        if (! $request->hasFile('attachment')) {
+            return null;
+        }
+
+        $file = $request->file('attachment');
+        $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $file->getClientOriginalName()) ?: 'file';
+
+        return $file->storeAs($folder, now()->format('YmdHis').'-'.$safe, 'local');
+    }
+
+    protected function markStoredFile(Question|QuestionReply $row): void
+    {
+        $path = $row->attachment_path;
+        $row->setAttribute('has_attachment', is_string($path) && Storage::disk('local')->exists($path));
+        $row->makeHidden(['attachment_path', 'attachment_url']);
+    }
+
+    protected function fileResponse(?string $path)
+    {
+        if (! $path || ! Storage::disk('local')->exists($path)) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->response($path);
     }
 
     protected function limitToPerson($query, User $user, string $askerColumn, string $providerColumn): void

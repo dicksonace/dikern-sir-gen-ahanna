@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -27,6 +28,18 @@ class IdentityDocument extends Model
         return [
             'reviewed_at' => 'datetime',
         ];
+    }
+
+    public function scopeForAccount(Builder $query): void
+    {
+        $query->select([
+            'identity_documents.id',
+            'identity_documents.user_id',
+            'identity_documents.kind',
+            'identity_documents.status',
+            'identity_documents.note',
+            'identity_documents.created_at',
+        ]);
     }
 
     public function user(): BelongsTo

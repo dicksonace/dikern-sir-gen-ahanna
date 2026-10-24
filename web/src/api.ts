@@ -16,7 +16,27 @@ export type PendingProfile = {
     email: string
     role: string
     division: string
+    identity_document?: { id: number; status: string } | null
   }
+}
+
+export type TeacherProfile = {
+  id: number
+  status: string
+  bio: string | null
+  qualifications: string | null
+  experience: string | null
+  satisfaction_points: number
+  user?: {
+    id: number
+    name: string
+    email: string
+    phone: string | null
+    role: string
+    division: string
+    identity_document?: { id: number; kind: string; status: string; note: string | null } | null
+  }
+  subjects?: Array<{ id: number; name: string }>
 }
 
 export type Overview = {
@@ -51,6 +71,10 @@ export class ApiError extends Error {
   }
 }
 
+export function apiRoot() {
+  return import.meta.env.VITE_API_URL ?? ''
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -67,8 +91,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const root = import.meta.env.VITE_API_URL ?? ''
-  const response = await fetch(`${root}/api${path}`, { ...options, headers })
+  const root = apiRoot()
+  const response = await fetch(`${root}/api${path}`, { ...options, headers, cache: 'no-store' })
   const text = await response.text()
   const data = text ? JSON.parse(text) : null
 

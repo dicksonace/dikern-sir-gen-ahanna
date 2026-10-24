@@ -2,11 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// Live Sir API on the Adikern Hostinger account.
+/// Live Sir API on sirgenahanna.com.
 /// Android emulator reaches this Mac through 10.0.2.2 when [useLiveApi] is false.
 class ApiConfig {
   static const bool useLiveApi = true;
-  static const String liveHost = 'https://adikern.com/sir';
+  static const String liveHost = 'https://api.sirgenahanna.com';
 
   static String get baseUrl => '$assetBaseUrl/api';
 

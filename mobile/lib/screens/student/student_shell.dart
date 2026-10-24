@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +10,11 @@ import '../../services/api_client.dart';
 import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/linked_file.dart';
+import '../../widgets/hold_builder.dart';
+import '../../widgets/tab_focus.dart';
 import '../shared/account_profile.dart';
+import '../shared/question_screen.dart';
 
 class StudentShell extends StatefulWidget {
   const StudentShell({super.key});
@@ -18,8 +23,15 @@ class StudentShell extends StatefulWidget {
   State<StudentShell> createState() => _StudentShellState();
 }
 
-class _StudentShellState extends State<StudentShell> {
+class _StudentShellState extends State<StudentShell> with WidgetsBindingObserver {
   int index = 0;
+  final visited = <int>{0};
+  final pages = const [
+    _StudentHome(),
+    _TutorsTab(),
+    _QuestionsTab(),
+    AccountProfile(),
+  ];
   List<LearningTrack> tracks = [];
   LearningTrack? selected;
   bool tracksReady = false;
@@ -30,10 +42,29 @@ class _StudentShellState extends State<StudentShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthState>().user;
+      context.read<ApiClient>().warm(division: user?.division, law: user?.isLaw ?? false);
       _loadTracks();
       _loadAreas();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    context.read<AuthState>().refreshIfStale();
+    final api = context.read<ApiClient>();
+    api.forget('questions');
+    api.forget('lessons');
+    api.bump();
   }
 
   Future<void> _loadTracks() async {
@@ -70,13 +101,6 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = const [
-      _StudentHome(),
-      _TutorsTab(),
-      _QuestionsTab(),
-      _PackagesTab(),
-      AccountProfile(),
-    ];
     final law = context.watch<AuthState>().user?.isLaw ?? false;
 
     return TrackScope(
@@ -89,11 +113,21 @@ class _StudentShellState extends State<StudentShell> {
         selected: law ? area : null,
         ready: !law || areasReady,
         onSelect: (subject) => setState(() => area = subject),
-        child: Scaffold(
-          body: pages[index],
+        child: TabFocus(
+          index: index,
+          child: Scaffold(
+          body: IndexedStack(
+            index: index,
+            children: [
+              for (var i = 0; i < pages.length; i++) visited.contains(i) ? pages[i] : const SizedBox.shrink(),
+            ],
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: index,
-            onDestinationSelected: (i) => setState(() => index = i),
+            onDestinationSelected: (i) => setState(() {
+              visited.add(i);
+              index = i;
+            }),
             backgroundColor: Theme.of(context).colorScheme.surface,
             destinations: [
               const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
@@ -103,10 +137,10 @@ class _StudentShellState extends State<StudentShell> {
                 label: law ? 'Advisers' : 'Tutors',
               ),
               const NavigationDestination(icon: Icon(Icons.help_outline), selectedIcon: Icon(Icons.help_rounded), label: 'Ask'),
-              const NavigationDestination(icon: Icon(Icons.card_membership_outlined), selectedIcon: Icon(Icons.card_membership), label: 'Package'),
               const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -189,6 +223,7 @@ class _StudentHome extends StatefulWidget {
 class _StudentHomeState extends State<_StudentHome> {
   late Future<({List<LessonModel> lessons, List<QuestionModel> questions, List<Subject> subjects})> future;
   String? loadedKey;
+  int seenRevision = -1;
 
   @override
   void initState() {
@@ -199,11 +234,17 @@ class _StudentHomeState extends State<_StudentHome> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
     final key = _selectionKey(context);
-    if (key == 'waiting' || key == loadedKey) return;
+    if (key == 'waiting') return;
     final first = loadedKey == null;
+    final selectionChanged = key != loadedKey;
+    final stale = revision != seenRevision;
+    if (!first && !selectionChanged && !(focus == 0 && stale)) return;
     loadedKey = key;
-    final next = _load();
+    if (focus == 0) seenRevision = revision;
+    final next = _load(force: stale && !first);
     if (first) {
       future = next;
     } else {
@@ -211,44 +252,49 @@ class _StudentHomeState extends State<_StudentHome> {
     }
   }
 
-  Future<({List<LessonModel> lessons, List<QuestionModel> questions, List<Subject> subjects})> _load() async {
+  Future<({List<LessonModel> lessons, List<QuestionModel> questions, List<Subject> subjects})> _load({bool force = false}) async {
     final api = context.read<ApiClient>();
     final user = context.read<AuthState>().user;
     final track = TrackScope.maybeOf(context)?.selected;
-    final lessons = await api.lessons();
-    final questions = await api.questions();
-    final subjects = user?.isLaw == true
-        ? await api.subjects(division: user?.division)
+    final subjectFuture = user?.isLaw == true
+        ? api.subjects(division: user?.division, force: force)
         : (track == null || track.isProgramme)
-            ? <Subject>[]
-            : await api.subjects(division: 'tutor', track: track.slug);
-    return (lessons: lessons, questions: questions, subjects: subjects);
+            ? Future.value(<Subject>[])
+            : api.subjects(division: 'tutor', track: track.slug, force: force);
+    final results = await Future.wait([
+      api.lessons(force: force),
+      api.questions(force: force),
+      subjectFuture,
+    ]);
+    return (
+      lessons: results[0] as List<LessonModel>,
+      questions: results[1] as List<QuestionModel>,
+      subjects: results[2] as List<Subject>,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthState>().user;
+    if (loadedKey == null) {
+      return const Scaffold(body: PageSkeleton.home());
+    }
     return RefreshIndicator(
-      onRefresh: () async => setState(() => future = _load()),
-      child: FutureBuilder(
+      onRefresh: () async => setState(() => future = _load(force: true)),
+      child: HoldBuilder(
         future: future,
-        builder: (context, snap) {
+        loading: const PageSkeleton.home(),
+        error: (error) => Center(child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('API error: $error', textAlign: TextAlign.center),
+        )),
+        builder: (context, data) {
           final scope = TrackScope.maybeOf(context);
           final practice = PracticeScope.maybeOf(context);
           final law = user?.isLaw == true;
           if ((!law && scope?.ready != true) || (law && practice?.ready != true)) {
             return const PageSkeleton.home();
           }
-          if (snap.connectionState != ConnectionState.done) {
-            return const PageSkeleton.home();
-          }
-          if (snap.hasError) {
-            return Center(child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('API error: ${snap.error}', textAlign: TextAlign.center),
-            ));
-          }
-          final data = snap.data!;
           final upcoming = data.lessons.where((l) => l.status == 'scheduled' || l.status == 'live').toList();
           final openQs = data.questions.where((q) => q.status == 'open').length;
           final track = scope?.selected;
@@ -492,28 +538,12 @@ class _StudentHomeState extends State<_StudentHome> {
                         else
                           ...data.questions.take(5).map((q) => Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
-                                child: SoftCard(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Chip(label: Text(q.subject?.name ?? 'General')),
-                                          const Spacer(),
-                                          StatusPill(
-                                            q.status,
-                                            color: q.status == 'open' ? AppColors.coral : AppColors.teal,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(q.body, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                      if (q.replies.isNotEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        Text(q.replies.first.content ?? '', style: const TextStyle(color: AppColors.muted)),
-                                      ],
-                                    ],
-                                  ),
+                                child: QuestionTile(
+                                  question: q,
+                                  onOpen: () async {
+                                    final changed = await context.push<bool>('/question/${q.id}', extra: q);
+                                    if (changed == true && mounted) setState(() => future = _load(force: true));
+                                  },
                                 ),
                               )),
                       ],
@@ -538,6 +568,7 @@ class _TutorsTab extends StatefulWidget {
 class _TutorsTabState extends State<_TutorsTab> {
   late Future<List<TutorProfile>> future;
   String? loadedKey;
+  int seenRevision = -1;
   String query = '';
 
   @override
@@ -549,11 +580,17 @@ class _TutorsTabState extends State<_TutorsTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
     final key = _selectionKey(context);
-    if (key == 'waiting' || key == loadedKey) return;
+    if (key == 'waiting') return;
     final first = loadedKey == null;
+    final selectionChanged = key != loadedKey;
+    final stale = revision != seenRevision;
+    if (!first && !selectionChanged && !(focus == 1 && stale)) return;
     loadedKey = key;
-    final next = _load();
+    if (focus == 1) seenRevision = revision;
+    final next = _load(force: stale && !first);
     if (first) {
       future = next;
     } else {
@@ -561,18 +598,18 @@ class _TutorsTabState extends State<_TutorsTab> {
     }
   }
 
-  Future<List<TutorProfile>> _load() async {
+  Future<List<TutorProfile>> _load({bool force = false}) async {
     final api = context.read<ApiClient>();
     final user = context.read<AuthState>().user;
     final track = TrackScope.maybeOf(context)?.selected;
     final division = user?.division;
     if (user?.isLaw == true) {
       final area = PracticeScope.maybeOf(context)?.selected;
-      return api.tutors(division: 'law', subject: area?.slug);
+      return api.tutors(division: 'law', subject: area?.slug, force: force);
     }
-    final all = await api.tutors(division: division);
+    final all = await api.tutors(division: division, force: force);
     if (track == null || track.isProgramme) return all;
-    final subjects = await api.subjects(division: 'tutor', track: track.slug);
+    final subjects = await api.subjects(division: 'tutor', track: track.slug, force: force);
     final slugs = subjects.map((subject) => subject.slug).toSet();
     return all.where((tutor) => tutor.subjects.any((subject) => slugs.contains(subject.slug))).toList();
   }
@@ -587,17 +624,19 @@ class _TutorsTabState extends State<_TutorsTab> {
         : track?.isProgramme == true
             ? 'Grade 5 scholarship'
             : 'Choose a tutor';
+    if (loadedKey == null) {
+      return Scaffold(appBar: AppBar(title: Text(title)), body: const PageSkeleton.list());
+    }
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: RefreshIndicator(
-        onRefresh: () async => setState(() => future = _load()),
-        child: FutureBuilder(
+        onRefresh: () async => setState(() => future = _load(force: true)),
+        child: HoldBuilder(
           future: future,
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const PageSkeleton.list();
-            }
-            final tutors = snap.data!.where((tutor) => textMatches(query, [
+          loading: const PageSkeleton.list(),
+          error: (error) => Center(child: Text('$error')),
+          builder: (context, rows) {
+            final tutors = rows.where((tutor) => textMatches(query, [
               tutor.displayName,
               tutor.subjectLabel,
               tutor.bio,
@@ -675,7 +714,7 @@ class _TutorsTabState extends State<_TutorsTab> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: SoftCard(
-                        onTap: () => context.push('/tutor-profile/${t.id}'),
+                        onTap: () => context.push('/tutor-profile/${t.id}', extra: t),
                         child: Row(
                           children: [
                             CircleAvatar(
@@ -721,7 +760,7 @@ class _TutorsTabState extends State<_TutorsTab> {
   Widget _adviserCard(BuildContext context, TutorProfile tutor) {
     final role = tutor.user?.roleLabel ?? 'Adviser';
     return SoftCard(
-      onTap: () => context.push('/tutor-profile/${tutor.id}'),
+      onTap: () => context.push('/tutor-profile/${tutor.id}', extra: tutor),
       child: Row(
         children: [
           CircleAvatar(
@@ -774,58 +813,91 @@ class _QuestionsTabState extends State<_QuestionsTab> {
   bool loading = true;
   bool submitting = false;
   String? loadedKey;
+  int seenRevision = -1;
   String query = '';
+  String queue = 'active';
+  String? attachmentPath;
+  String? attachmentName;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
     final key = _selectionKey(context);
-    if (key == 'waiting' || key == loadedKey) return;
+    if (key == 'waiting') return;
+    final first = loadedKey == null;
+    final stale = revision != seenRevision;
+    if (!first && key == loadedKey && !(focus == 2 && stale)) return;
     loadedKey = key;
-    _load();
+    if (focus == 2) seenRevision = revision;
+    _load(force: stale && !first);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     final api = context.read<ApiClient>();
     final user = context.read<AuthState>().user;
-    final track = TrackScope.maybeOf(context)?.selected;
-    setState(() => loading = true);
+    final area = PracticeScope.maybeOf(context)?.selected;
+    if (questions.isEmpty) setState(() => loading = true);
     try {
-      if (user?.isLaw == true) {
-        final area = PracticeScope.maybeOf(context)?.selected;
-        subjects = area == null ? [] : [area];
-        tutors = await api.tutors(division: 'law', subject: area?.slug);
-      } else if (track != null && !track.isProgramme) {
-        subjects = await api.subjects(division: 'tutor', track: track.slug);
-        final all = await api.tutors(division: user?.division);
-        final slugs = subjects.map((subject) => subject.slug).toSet();
-        tutors = all.where((tutor) => tutor.subjects.any((subject) => slugs.contains(subject.slug))).toList();
-      } else {
-        subjects = [];
-        tutors = await api.tutors(division: user?.division);
-      }
-      questions = await api.questions();
-      if (selectedSubject == null || !subjects.any((subject) => subject.id == selectedSubject!.id)) {
-        selectedSubject = subjects.isNotEmpty ? subjects.first : null;
-      }
+      final tutorFuture = user?.isLaw == true
+          ? api.tutors(division: 'law', subject: area?.slug, force: force)
+          : api.tutors(division: 'tutor', force: force);
+      final results = await Future.wait([
+        api.activeTutorUserIds(force: force),
+        tutorFuture,
+        api.questions(force: force),
+      ]);
+      final paidIds = results[0] as Set<int>;
+      final all = results[1] as List<TutorProfile>;
+      tutors = all.where((tutor) => paidIds.contains(tutor.userId)).toList();
       if (selectedTutor == null || !tutors.any((tutor) => tutor.id == selectedTutor!.id)) {
         selectedTutor = tutors.isNotEmpty ? tutors.first : null;
       }
+      _subjectsForSelectedTutor();
+      questions = results[2] as List<QuestionModel>;
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
+  void _subjectsForSelectedTutor() {
+    subjects = selectedTutor?.subjects ?? const [];
+    if (selectedSubject == null || !subjects.any((subject) => subject.id == selectedSubject!.id)) {
+      selectedSubject = subjects.isNotEmpty ? subjects.first : null;
+    }
+  }
+
+  bool _inQueue(QuestionModel q) => queue == 'closed' ? q.status == 'closed' : q.status != 'closed';
+
+  Future<void> _pick(String kind) async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: kind == 'video' ? ['mp4', 'mov'] : ['jpg', 'jpeg', 'png', 'webp'],
+    );
+    final file = picked?.files.single;
+    if (file?.path == null) return;
+    setState(() {
+      attachmentPath = file!.path;
+      attachmentName = file.name;
+    });
+  }
+
   Future<void> _submit() async {
-    if (selectedTutor == null || controller.text.trim().isEmpty) return;
+    if (selectedTutor == null) return;
+    if (controller.text.trim().isEmpty && attachmentPath == null) return;
     setState(() => submitting = true);
     try {
       await context.read<ApiClient>().askQuestion(
             tutorId: selectedTutor!.userId,
             subjectId: selectedSubject?.id,
             body: controller.text.trim(),
+            filePath: attachmentPath,
+            filename: attachmentName,
           );
       controller.clear();
+      attachmentPath = null;
+      attachmentName = null;
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -870,8 +942,10 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                       const SizedBox(height: 14),
                       if (tutors.isEmpty)
                         Text(
-                          law ? 'No advisers in this practice area yet.' : 'No tutors on this track yet.',
-                          style: const TextStyle(color: AppColors.muted),
+                          law
+                              ? 'You can ask an adviser after you have an active paid package with them.'
+                              : 'You can ask a tutor after you have an active paid package with them.',
+                          style: const TextStyle(color: AppColors.muted, height: 1.35),
                         )
                       else
                         DropdownButtonFormField<TutorProfile>(
@@ -882,7 +956,10 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                                     child: Text(law ? '${t.displayName} · ${t.user?.roleLabel ?? 'Adviser'}' : t.displayName),
                                   ))
                               .toList(),
-                          onChanged: (v) => setState(() => selectedTutor = v),
+                          onChanged: (v) => setState(() {
+                            selectedTutor = v;
+                            _subjectsForSelectedTutor();
+                          }),
                           decoration: InputDecoration(labelText: law ? 'Lawyer or counsel' : 'Tutor'),
                         ),
                       if (!law && subjects.isNotEmpty) ...[
@@ -902,11 +979,45 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                         maxLines: 4,
                         decoration: const InputDecoration(labelText: 'Your question', alignLabelWithHint: true),
                       ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: submitting ? null : () => _pick('image'),
+                              icon: const Icon(Icons.photo_outlined),
+                              label: const Text('Photo'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: submitting ? null : () => _pick('video'),
+                              icon: const Icon(Icons.videocam_outlined),
+                              label: const Text('Video'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (attachmentPath != null) ...[
+                        const SizedBox(height: 12),
+                        LinkedFile(localPath: attachmentPath, name: attachmentName),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => setState(() {
+                              attachmentPath = null;
+                              attachmentName = null;
+                            }),
+                            child: const Text('Remove file'),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: submitting ? null : _submit,
+                          onPressed: submitting || selectedTutor == null ? null : _submit,
                           child: Text(submitting ? 'Sending…' : 'Submit question'),
                         ),
                       ),
@@ -916,134 +1027,33 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                 const SizedBox(height: 20),
                 const SectionTitle('Your questions'),
                 const SizedBox(height: 12),
+                QuestionQueueTabs(
+                  selected: queue,
+                  activeCount: questions.where((q) => q.status != 'closed').length,
+                  closedCount: questions.where((q) => q.status == 'closed').length,
+                  onChanged: (value) => setState(() => queue = value),
+                ),
+                const SizedBox(height: 12),
                 AppSearchField(
                   hint: 'Search your questions',
                   onChanged: (value) => setState(() => query = value),
                 ),
                 const SizedBox(height: 12),
-                ...questions.where((q) => textMatches(query, [q.body, q.subject?.name, q.status])).map((q) => Padding(
+                if (questions.where((q) => _inQueue(q) && textMatches(query, [q.body, q.subject?.name, q.status])).isEmpty)
+                  EmptyHint(queue == 'closed' ? 'No closed questions.' : 'No active questions.')
+                else
+                ...questions.where((q) => _inQueue(q) && textMatches(query, [q.body, q.subject?.name, q.status])).map((q) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: SoftCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(q.subject?.name ?? 'General', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                const Spacer(),
-                                StatusPill(
-                                  q.status,
-                                  color: q.status == 'open' ? AppColors.coral : AppColors.teal,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(q.body),
-                            if (q.replies.isNotEmpty) ...[
-                              const Divider(height: 20),
-                              Text(law ? 'Reply' : 'Tutor reply', style: GoogleFonts.manrope(fontWeight: FontWeight.w800, color: AppColors.tealDeep)),
-                              const SizedBox(height: 4),
-                              Text(q.replies.first.content ?? ''),
-                            ],
-                          ],
-                        ),
+                      child: QuestionTile(
+                        question: q,
+                        onOpen: () async {
+                          final changed = await context.push<bool>('/question/${q.id}', extra: q);
+                          if (changed == true && mounted) _load(force: true);
+                        },
                       ),
                     )),
               ],
             ),
-    );
-  }
-}
-
-class _PackagesTab extends StatefulWidget {
-  const _PackagesTab();
-
-  @override
-  State<_PackagesTab> createState() => _PackagesTabState();
-}
-
-class _PackagesTabState extends State<_PackagesTab> {
-  late Future<List<PackageModel>> future;
-  String query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    future = context.read<ApiClient>().packages(division: context.read<AuthState>().user?.division);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final law = context.watch<AuthState>().user?.isLaw ?? false;
-    return Scaffold(
-      appBar: AppBar(title: Text(law ? 'Consultation packages' : 'Monthly packages')),
-      body: FutureBuilder(
-        future: future,
-        builder: (context, snap) {
-          if (!snap.hasData) return const PageSkeleton.list();
-          final packages = snap.data!.where((package) => textMatches(query, [package.name, package.description])).toList();
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              AppSearchField(
-                hint: 'Search packages',
-                onChanged: (value) => setState(() => query = value),
-              ),
-              const SizedBox(height: 16),
-              SoftCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Bank transfer payment', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Bank: Commercial Bank\nAccount: Sir Gen Ahanna (Pvt) Ltd\nAcc No: 8001234567\nBranch: Colombo',
-                      style: TextStyle(height: 1.45, color: AppColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              ...packages.map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: SoftCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(p.name, style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 17)),
-                              ),
-                              Text(
-                                'Rs ${p.price.toStringAsFixed(0)}',
-                                style: GoogleFonts.sora(fontWeight: FontWeight.w800, color: AppColors.tealDeep),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(p.description ?? '', style: const TextStyle(color: AppColors.muted)),
-                          const SizedBox(height: 8),
-                          Text(
-                            law ? 'Consultation in your practice area' : '${p.weeklyHours} hrs live / week · Instant Q · Screen share',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => context.push('/payment/${p.id}'),
-                              child: const Text('Select & pay'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )),
-            ],
-          );
-        },
-      ),
     );
   }
 }

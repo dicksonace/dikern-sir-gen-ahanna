@@ -1,7 +1,9 @@
 import 'package:go_router/go_router.dart';
+import '../models/models.dart';
 import '../screens/auth/splash_screen.dart';
 import '../screens/auth/welcome_screen.dart';
 import '../screens/shared/detail_screens.dart';
+import '../screens/shared/question_screen.dart';
 import '../screens/student/student_shell.dart';
 import '../screens/tutor/tutor_shell.dart';
 import '../state/auth_state.dart';
@@ -35,7 +37,10 @@ GoRouter createRouter(AuthState auth) {
       GoRoute(path: '/tutor', builder: (context, state) => const TutorShell()),
       GoRoute(
         path: '/tutor-profile/:id',
-        builder: (context, state) => TutorProfileScreen(id: state.pathParameters['id']!),
+        builder: (context, state) => TutorProfileScreen(
+          id: state.pathParameters['id']!,
+          initial: state.extra is TutorProfile ? state.extra as TutorProfile : null,
+        ),
       ),
       GoRoute(
         path: '/payment/:packageId',
@@ -48,6 +53,13 @@ GoRouter createRouter(AuthState auth) {
         },
       ),
       GoRoute(path: '/live-lesson', builder: (context, state) => const LiveLessonScreen()),
+      GoRoute(
+        path: '/question/:id',
+        builder: (context, state) => QuestionScreen(
+          id: int.parse(state.pathParameters['id']!),
+          initial: state.extra is QuestionModel ? state.extra as QuestionModel : null,
+        ),
+      ),
     ],
   );
 }

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,32 +11,49 @@ import '../../widgets/common.dart';
 
 class TutorProfileScreen extends StatefulWidget {
   final String id;
-  const TutorProfileScreen({super.key, required this.id});
+  final TutorProfile? initial;
+  const TutorProfileScreen({super.key, required this.id, this.initial});
 
   @override
   State<TutorProfileScreen> createState() => _TutorProfileScreenState();
 }
 
 class _TutorProfileScreenState extends State<TutorProfileScreen> {
-  late Future<TutorProfile> future;
+  TutorProfile? tutor;
+  List<PackageModel> packages = [];
+  bool loadingPackages = true;
 
   @override
   void initState() {
     super.initState();
-    future = context.read<ApiClient>().tutorShow(int.parse(widget.id));
+    tutor = widget.initial;
+    _load();
+  }
+
+  Future<void> _load() async {
+    final api = context.read<ApiClient>();
+    final division = context.read<AuthState>().user?.division;
+    final results = await Future.wait([
+      widget.initial != null ? Future<TutorProfile>.value(widget.initial!) : api.tutorShow(int.parse(widget.id)),
+      api.packages(division: division),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      tutor = results[0] as TutorProfile;
+      packages = results[1] as List<PackageModel>;
+      loadingPackages = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
-      appBar: AppBar(title: Text(law ? 'Adviser' : 'Tutor profile')),
-      body: FutureBuilder(
-        future: future,
-        builder: (context, snap) {
-          if (!snap.hasData) return const PageSkeleton.list();
-          final tutor = snap.data!;
-          return ListView(
+      appBar: AppBar(title: Text(law ? 'Adviser' : 'Tutor')),
+      body: () {
+        final tutor = this.tutor;
+        if (tutor == null) return const PageSkeleton.list();
+        return ListView(
             padding: const EdgeInsets.all(20),
             children: [
               SoftCard(
@@ -78,33 +96,74 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                     const SizedBox(height: 12),
                     Text('Qualifications: ${tutor.qualifications ?? '-'}'),
                     Text('Experience: ${tutor.experience ?? '-'}'),
-                    const SizedBox(height: 12),
-                    if (law)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          'This is general guidance, not a court filing.',
-                          style: TextStyle(color: AppColors.muted, height: 1.4),
-                        ),
+                    if (tutor.availableSlots.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Available times', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, children: tutor.availableSlots.map((s) => Chip(label: Text(s))).toList()),
+                    ],
+                    if (law) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'This is general guidance, not a court filing.',
+                        style: TextStyle(color: AppColors.muted, height: 1.4),
                       ),
-                    const Text('Available times', style: TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Wrap(spacing: 8, children: tutor.availableSlots.map((s) => Chip(label: Text(s))).toList()),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => context.push('/payment/1?tutorId=${tutor.userId}'),
-                        child: Text(law ? 'Book a consultation' : 'Choose package with this tutor'),
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(height: 18),
+              Text(law ? 'Choose a consultation' : 'Choose a package', style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 18)),
+              const SizedBox(height: 6),
+              Text(
+                law ? 'Pay ${tutor.displayName} for this advice.' : 'Pay ${tutor.displayName} for this package.',
+                style: const TextStyle(color: AppColors.muted, height: 1.35),
+              ),
+              const SizedBox(height: 12),
+              if (loadingPackages)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (packages.isEmpty)
+                const EmptyHint('No packages are available yet.')
+              else
+                ...packages.map((package) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: SoftCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: Text(package.name, style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 17))),
+                                Text('Rs ${package.price.toStringAsFixed(0)}', style: GoogleFonts.sora(fontWeight: FontWeight.w800, color: AppColors.tealDeep)),
+                              ],
+                            ),
+                            if ((package.description ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(package.description!, style: const TextStyle(color: AppColors.muted)),
+                            ],
+                            const SizedBox(height: 8),
+                            Text(
+                              law ? 'Consultation with this adviser' : '${package.weeklyHours} hrs live / week · Instant questions',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => context.push('/payment/${package.id}?tutorId=${tutor.userId}'),
+                                child: const Text('Select & pay'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )),
             ],
           );
-        },
-      ),
+        }(),
     );
   }
 }
@@ -124,23 +183,28 @@ class _PaymentScreenState extends State<PaymentScreen> {
   TutorProfile? selectedTutor;
   bool loading = true;
   bool submitting = false;
-  bool slipAttached = false;
+  String? slipPath;
+  String? slipName;
 
   @override
   void initState() {
     super.initState();
+    final api = context.read<ApiClient>();
+    final division = context.read<AuthState>().user?.division;
+    final cachedPackages = api.peek<List<PackageModel>>('packages:${division ?? ''}');
+    final cachedTutors = api.peek<List<TutorProfile>>('tutors:${division ?? ''}:');
+    if (cachedPackages != null && cachedTutors != null) {
+      _apply(cachedPackages, cachedTutors);
+      loading = false;
+    }
     _load();
   }
 
-  Future<void> _load() async {
-    final api = context.read<ApiClient>();
-    final division = context.read<AuthState>().user?.division;
-    final packages = await api.packages(division: division);
-    tutors = await api.tutors(division: division);
-    package = packages.firstWhere(
-      (p) => p.id == int.parse(widget.packageId),
-      orElse: () => packages.first,
-    );
+  void _apply(List<PackageModel> rows, List<TutorProfile> people) {
+    tutors = people;
+    final packageId = int.parse(widget.packageId);
+    package = rows.where((row) => row.id == packageId).firstOrNull ?? (rows.isEmpty ? null : rows.first);
+    selectedTutor = null;
     if (widget.tutorId != null) {
       for (final t in tutors) {
         if (t.userId == widget.tutorId) {
@@ -148,19 +212,50 @@ class _PaymentScreenState extends State<PaymentScreen> {
           break;
         }
       }
+    } else if (tutors.isNotEmpty) {
+      selectedTutor = tutors.first;
     }
-    selectedTutor ??= tutors.isNotEmpty ? tutors.first : null;
-    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _load() async {
+    final api = context.read<ApiClient>();
+    final division = context.read<AuthState>().user?.division;
+    final results = await Future.wait([
+      api.packages(division: division),
+      api.tutors(division: division),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _apply(results[0] as List<PackageModel>, results[1] as List<TutorProfile>);
+      loading = false;
+    });
+  }
+
+  Future<void> _chooseSlip() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: false,
+    );
+    final file = picked?.files.single;
+    final path = file?.path;
+    if (path == null || !mounted) return;
+    setState(() {
+      slipPath = path;
+      slipName = file?.name ?? 'slip';
+    });
   }
 
   Future<void> _submit() async {
-    if (selectedTutor == null || package == null || !slipAttached) return;
+    final path = slipPath;
+    if (selectedTutor == null || package == null || path == null) return;
     setState(() => submitting = true);
     try {
       await context.read<ApiClient>().subscribe(
             tutorId: selectedTutor!.userId,
             packageId: package!.id,
-            slipNote: 'bank-slip-prototype.jpg',
+            slipPath: path,
+            slipName: slipName ?? 'slip',
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,14 +301,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(law ? 'Choose adviser' : 'Assign tutor', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
+                      Text(law ? 'Adviser' : 'Tutor', style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<TutorProfile>(
-                        initialValue: selectedTutor,
-                        items: tutors.map((t) => DropdownMenuItem(value: t, child: Text(t.displayName))).toList(),
-                        onChanged: (v) => setState(() => selectedTutor = v),
-                        decoration: InputDecoration(labelText: law ? 'Lawyer or counsel' : 'Tutor'),
+                      Text(
+                        selectedTutor?.displayName ?? (law ? 'Adviser' : 'Tutor'),
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                       ),
+                      if ((selectedTutor?.subjectLabel ?? '').isNotEmpty)
+                        Text(selectedTutor!.subjectLabel, style: const TextStyle(color: AppColors.muted)),
                     ],
                   ),
                 ),
@@ -239,15 +334,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       const Text('Upload payment slip', style: TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
-                        onPressed: () => setState(() => slipAttached = true),
+                        onPressed: submitting ? null : _chooseSlip,
                         icon: const Icon(Icons.upload_file_rounded),
-                        label: Text(slipAttached ? 'slip attached (prototype)' : 'Choose bank slip image'),
+                        label: Text(slipPath == null ? 'Choose bank slip image' : 'Choose a different file'),
                       ),
+                      if (slipName != null) ...[
+                        const SizedBox(height: 8),
+                        Text(slipName!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const Text('Check this is the right slip, then submit it.'),
+                      ],
                       const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: (slipAttached && !submitting) ? _submit : null,
+                          onPressed: (slipPath != null && !submitting) ? _submit : null,
                           child: Text(submitting ? 'Submitting…' : 'Submit for verification'),
                         ),
                       ),

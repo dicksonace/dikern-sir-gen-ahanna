@@ -15,7 +15,7 @@
 <body>
     <main>
         <div class="mark"></div>
-        <h1>{{ $ok ? 'Email confirmed' : 'That code did not work' }}</h1>
+        <h1>{{ $title ?? ($ok ? 'Email confirmed' : 'That code did not work') }}</h1>
         <p>{{ $message }}</p>
     </main>
 </body>

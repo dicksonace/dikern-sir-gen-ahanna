@@ -8,6 +8,9 @@ import '../../services/api_client.dart';
 import '../../state/auth_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/hold_builder.dart';
+import '../../widgets/tab_focus.dart';
+import '../shared/question_screen.dart';
 import '../shared/account_profile.dart';
 
 class TutorShell extends StatefulWidget {
@@ -17,23 +20,62 @@ class TutorShell extends StatefulWidget {
   State<TutorShell> createState() => _TutorShellState();
 }
 
-class _TutorShellState extends State<TutorShell> {
+class _TutorShellState extends State<TutorShell> with WidgetsBindingObserver {
   int index = 0;
+  final visited = <int>{0};
+  final pages = const [
+    _TutorHome(),
+    _TutorQuestions(),
+    _TutorEarnings(),
+    AccountProfile(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final api = context.read<ApiClient>();
+      api.lessons();
+      api.questions();
+      api.tutorEarnings();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    context.read<AuthState>().refreshIfStale();
+    final api = context.read<ApiClient>();
+    api.forget('questions');
+    api.forget('lessons');
+    api.forget('earnings');
+    api.bump();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pages = const [
-      _TutorHome(),
-      _TutorQuestions(),
-      _TutorEarnings(),
-      AccountProfile(),
-    ];
-
-    return Scaffold(
-      body: pages[index],
+    return TabFocus(
+      index: index,
+      child: Scaffold(
+      body: IndexedStack(
+        index: index,
+        children: [
+          for (var i = 0; i < pages.length; i++) visited.contains(i) ? pages[i] : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
-        onDestinationSelected: (i) => setState(() => index = i),
+        onDestinationSelected: (i) => setState(() {
+          visited.add(i);
+          index = i;
+        }),
         backgroundColor: Theme.of(context).colorScheme.surface,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard_rounded), label: 'Home'),
@@ -42,6 +84,7 @@ class _TutorShellState extends State<TutorShell> {
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
       ),
+    ),
     );
   }
 }
@@ -55,16 +98,40 @@ class _TutorHome extends StatefulWidget {
 
 class _TutorHomeState extends State<_TutorHome> {
   late Future<({List<LessonModel> lessons, List<QuestionModel> questions})> future;
+  bool ready = false;
+  int seenRevision = -1;
 
   @override
   void initState() {
     super.initState();
-    future = _load();
+    future = Future.value((lessons: <LessonModel>[], questions: <QuestionModel>[]));
   }
 
-  Future<({List<LessonModel> lessons, List<QuestionModel> questions})> _load() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
+    final first = !ready;
+    final stale = revision != seenRevision;
+    if (!first && !(focus == 0 && stale)) return;
+    ready = true;
+    if (focus == 0) seenRevision = revision;
+    final next = _load(force: stale && !first);
+    if (first) {
+      future = next;
+    } else {
+      setState(() => future = next);
+    }
+  }
+
+  Future<({List<LessonModel> lessons, List<QuestionModel> questions})> _load({bool force = false}) async {
     final api = context.read<ApiClient>();
-    return (lessons: await api.lessons(), questions: await api.questions());
+    final results = await Future.wait([
+      api.lessons(force: force),
+      api.questions(force: force),
+    ]);
+    return (lessons: results[0] as List<LessonModel>, questions: results[1] as List<QuestionModel>);
   }
 
   @override
@@ -72,16 +139,19 @@ class _TutorHomeState extends State<_TutorHome> {
     final user = context.watch<AuthState>().user;
     final points = user?.tutorProfile?.satisfactionPoints ?? 0;
 
+    if (!ready) return const Scaffold(body: PageSkeleton.home());
     return RefreshIndicator(
-      onRefresh: () async => setState(() => future = _load()),
-      child: FutureBuilder(
+      onRefresh: () async => setState(() => future = _load(force: true)),
+      child: HoldBuilder(
         future: future,
-        builder: (context, snap) {
-          if (!snap.hasData) return const PageSkeleton.home();
-          final data = snap.data!;
+        loading: const PageSkeleton.home(),
+        error: (error) => Center(child: Text('$error')),
+        builder: (context, data) {
           final next = data.lessons.where((l) => l.status == 'scheduled' || l.status == 'live').toList();
           final openQs = data.questions.where((q) => q.status == 'open').length;
           final law = user?.isLaw == true;
+          final profile = user?.tutorProfile;
+          final waiting = profile != null && profile.status != 'approved';
 
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -113,6 +183,17 @@ class _TutorHomeState extends State<_TutorHome> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (waiting) ...[
+                      SoftCard(
+                        child: Text(
+                          profile.status == 'rejected'
+                              ? 'An admin did not approve this ${user?.roleLabel.toLowerCase() ?? 'account'} profile. Update it from Profile, then wait for another review.'
+                              : 'Waiting for admin approval. ${law ? 'Clients' : 'Students'} cannot see this ${user?.roleLabel.toLowerCase() ?? 'account'} until an admin approves it.',
+                          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.4),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (next.isNotEmpty) ...[
                       SoftCard(
                         padding: const EdgeInsets.all(14),
@@ -218,38 +299,32 @@ class _TutorQuestions extends StatefulWidget {
 
 class _TutorQuestionsState extends State<_TutorQuestions> {
   late Future<List<QuestionModel>> future;
+  bool ready = false;
+  int seenRevision = -1;
   String query = '';
+  String queue = 'active';
 
   @override
   void initState() {
     super.initState();
-    future = context.read<ApiClient>().questions();
+    future = Future.value(const []);
   }
 
-  Future<void> _reply(QuestionModel q, String type) async {
-    final controller = TextEditingController(
-      text: type == 'text'
-          ? (context.read<AuthState>().user?.isLaw == true
-              ? 'Here is guidance on your question.'
-              : 'Here is a quick explanation from your tutor.')
-          : 'Attached $type reply (prototype path)',
-    );
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Reply ($type)'),
-        content: TextField(controller: controller, maxLines: 4),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await context.read<ApiClient>().replyQuestion(q.id, type: type == 'doc' ? 'document' : type, content: controller.text);
-    setState(() => future = context.read<ApiClient>().questions());
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reply sent via API')));
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
+    final first = !ready;
+    final stale = revision != seenRevision;
+    if (!first && !(focus == 1 && stale)) return;
+    ready = true;
+    if (focus == 1) seenRevision = revision;
+    final next = context.read<ApiClient>().questions(force: stale && !first);
+    if (first) {
+      future = next;
+    } else {
+      setState(() => future = next);
     }
   }
 
@@ -258,30 +333,50 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
     final law = context.watch<AuthState>().user?.isLaw ?? false;
     return Scaffold(
       appBar: AppBar(title: Text(law ? 'Client questions' : 'Student questions')),
-      body: RefreshIndicator(
-        onRefresh: () async => setState(() => future = context.read<ApiClient>().questions()),
-        child: FutureBuilder(
+      body: ready
+          ? RefreshIndicator(
+        onRefresh: () async => setState(() => future = context.read<ApiClient>().questions(force: true)),
+        child: HoldBuilder(
           future: future,
-          builder: (context, snap) {
-            if (!snap.hasData) return const PageSkeleton.list();
-            final questions = snap.data!.where((question) => textMatches(query, [
-              question.body,
-              question.student?.name,
-              question.subject?.name,
-              question.status,
-            ])).toList();
+          loading: const PageSkeleton.list(),
+          error: (error) => Center(child: Text('$error')),
+          builder: (context, all) {
+            final questions = all.where((question) {
+              final inQueue = queue == 'closed' ? question.status == 'closed' : question.status != 'closed';
+              return inQueue &&
+                  textMatches(query, [
+                    question.body,
+                    question.student?.name,
+                    question.subject?.name,
+                    question.status,
+                  ]);
+            }).toList();
             return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                  child: AppSearchField(
-                    hint: 'Search questions',
-                    onChanged: (value) => setState(() => query = value),
+                  child: Column(
+                    children: [
+                      QuestionQueueTabs(
+                        selected: queue,
+                        activeCount: all.where((q) => q.status != 'closed').length,
+                        closedCount: all.where((q) => q.status == 'closed').length,
+                        onChanged: (value) => setState(() => queue = value),
+                      ),
+                      const SizedBox(height: 12),
+                      AppSearchField(
+                        hint: 'Search questions',
+                        onChanged: (value) => setState(() => query = value),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
                   child: questions.isEmpty
-                      ? ListView(children: const [SizedBox(height: 120), Center(child: Text('No questions yet'))])
+                      ? ListView(children: [
+                          const SizedBox(height: 120),
+                          Center(child: Text(queue == 'closed' ? 'No closed questions.' : 'No active questions.')),
+                        ])
                       : ListView.builder(
               padding: const EdgeInsets.all(20),
               itemCount: questions.length,
@@ -289,38 +384,12 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
                 final q = questions[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: SoftCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Chip(label: Text(q.subject?.name ?? 'General')),
-                            const Spacer(),
-                            StatusPill(q.status, color: q.status == 'open' ? AppColors.coral : AppColors.teal),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(q.student?.name ?? 'Student', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                        Text(q.body, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        if (q.status == 'open') ...[
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton(onPressed: () => _reply(q, 'text'), child: const Text('Text')),
-                              OutlinedButton(onPressed: () => _reply(q, 'image'), child: const Text('Image')),
-                              OutlinedButton(onPressed: () => _reply(q, 'video'), child: const Text('Video')),
-                              OutlinedButton(onPressed: () => _reply(q, 'doc'), child: const Text('Document')),
-                            ],
-                          ),
-                        ] else if (q.replies.isNotEmpty) ...[
-                          const Divider(height: 20),
-                          Text(q.replies.first.content ?? '', style: const TextStyle(color: AppColors.muted)),
-                        ],
-                      ],
-                    ),
+                  child: QuestionTile(
+                    question: q,
+                    onOpen: () async {
+                      final changed = await context.push<bool>('/question/${q.id}', extra: q);
+                      if (changed == true && mounted) setState(() => future = context.read<ApiClient>().questions(force: true));
+                    },
                   ),
                 );
               },
@@ -330,7 +399,8 @@ class _TutorQuestionsState extends State<_TutorQuestions> {
             );
           },
         ),
-      ),
+      )
+          : const PageSkeleton.list(),
     );
   }
 }
@@ -344,23 +414,44 @@ class _TutorEarnings extends StatefulWidget {
 
 class _TutorEarningsState extends State<_TutorEarnings> {
   late Future<List<CommissionModel>> future;
+  bool ready = false;
+  int seenRevision = -1;
   String query = '';
 
   @override
   void initState() {
     super.initState();
-    future = context.read<ApiClient>().tutorEarnings();
+    future = Future.value(const []);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final focus = TabFocus.of(context);
+    final revision = context.watch<ApiClient>().revision;
+    final first = !ready;
+    final stale = revision != seenRevision;
+    if (!first && !(focus == 2 && stale)) return;
+    ready = true;
+    if (focus == 2) seenRevision = revision;
+    final next = context.read<ApiClient>().tutorEarnings(force: stale && !first);
+    if (first) {
+      future = next;
+    } else {
+      setState(() => future = next);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Monthly earnings')),
-      body: FutureBuilder(
+      body: ready
+          ? HoldBuilder(
         future: future,
-        builder: (context, snap) {
-          if (!snap.hasData) return const PageSkeleton.list();
-          final items = snap.data!;
+        loading: const PageSkeleton.list(),
+        error: (error) => Center(child: Text('$error')),
+        builder: (context, items) {
           final shown = items.where((item) => textMatches(query, [item.month, item.status])).toList();
           final total = items.fold<double>(0, (a, b) => a + b.amount);
           return ListView(
@@ -410,7 +501,8 @@ class _TutorEarningsState extends State<_TutorEarnings> {
             ],
           );
         },
-      ),
+      )
+          : const PageSkeleton.list(),
     );
   }
 }
