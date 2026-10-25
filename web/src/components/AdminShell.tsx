@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, NavLink, Navigate, useLocation } from 'react-router-dom'
+import { NavLink, Navigate, useLocation } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
@@ -20,7 +20,6 @@ const lawFallback: Item[] = [
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const { user, ready, logout } = useAuth()
-  const { pathname, hash } = useLocation()
   const [learning, setLearning] = useState<Item[]>(learningFallback)
   const [law, setLaw] = useState<Item[]>(lawFallback)
 
@@ -47,19 +46,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('admin-nav-refresh', loadNav)
   }, [user])
 
-  useEffect(() => {
-    if (pathname !== '/dashboard') return
-    const frame = window.requestAnimationFrame(() => {
-      const panel = document.querySelector('main')
-      if (!hash) {
-        panel?.scrollTo({ top: 0, behavior: 'smooth' })
-        return
-      }
-      document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [pathname, hash])
-
   if (!ready) return <p className="p-8 text-muted">Loading…</p>
   if (!user) return <Navigate to="/login" replace />
 
@@ -74,57 +60,17 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="mt-6 flex flex-1 flex-col gap-1 text-sm">
-          <Link
-            to="/dashboard"
-            aria-current={pathname === '/dashboard' && !dashboardSection(hash) ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && !dashboardSection(hash) })}
-          >
+          <NavLink to="/dashboard" className={subLinkClass} end>
             Overview
-          </Link>
+          </NavLink>
           <NavGroup label="Learning" base="/learning" items={learning} />
           <NavGroup label="Law advice" base="/law" items={law} />
-          <Link
-            to="/dashboard#profiles"
-            aria-current={pathname === '/dashboard' && hash === '#profiles' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#profiles' })}
-          >
-            Profiles
-          </Link>
-          <Link
-            to="/dashboard#questions"
-            aria-current={pathname === '/dashboard' && hash === '#questions' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#questions' })}
-          >
-            Questions
-          </Link>
-          <Link
-            to="/dashboard#lessons"
-            aria-current={pathname === '/dashboard' && hash === '#lessons' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#lessons' })}
-          >
-            Lessons
-          </Link>
-          <Link
-            to="/dashboard#accounts"
-            aria-current={pathname === '/dashboard' && hash === '#accounts' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#accounts' })}
-          >
-            Students
-          </Link>
-          <Link
-            to="/dashboard#payments"
-            aria-current={pathname === '/dashboard' && hash === '#payments' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#payments' })}
-          >
-            Payments
-          </Link>
-          <Link
-            to="/dashboard#waiting"
-            aria-current={pathname === '/dashboard' && hash === '#waiting' ? 'page' : undefined}
-            className={linkClass({ isActive: pathname === '/dashboard' && hash === '#waiting' })}
-          >
-            Approvals
-          </Link>
+          <NavLink to="/profiles" className={subLinkClass}>Profiles</NavLink>
+          <NavLink to="/questions" className={subLinkClass}>Questions</NavLink>
+          <NavLink to="/lessons" className={subLinkClass}>Lessons</NavLink>
+          <NavLink to="/students" className={subLinkClass}>Students</NavLink>
+          <NavLink to="/payments" className={subLinkClass}>Payments</NavLink>
+          <NavLink to="/approvals" className={subLinkClass}>Approvals</NavLink>
         </nav>
         <div className="mt-6 rounded-2xl bg-white/10 p-3">
           <p className="truncate text-xs text-white/70">{user.email}</p>
@@ -173,16 +119,6 @@ function NavGroup({ label, base, items }: { label: string; base: string; items: 
       ) : null}
     </div>
   )
-}
-
-function dashboardSection(hash: string) {
-  return ['#profiles', '#questions', '#lessons', '#accounts', '#payments', '#waiting'].includes(hash)
-}
-
-function linkClass({ isActive }: { isActive: boolean }) {
-  return isActive
-    ? 'block rounded-lg bg-white/15 px-3 py-2 font-semibold'
-    : 'block rounded-lg px-3 py-2 text-white/80'
 }
 
 function subLinkClass({ isActive }: { isActive: boolean }) {

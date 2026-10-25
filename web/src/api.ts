@@ -39,6 +39,72 @@ export type TeacherProfile = {
   subjects?: Array<{ id: number; name: string }>
 }
 
+export const roleLabel: Record<string, string> = {
+  student: 'Student',
+  tutor: 'Tutor',
+  lecturer: 'Lecturer',
+  client: 'Client',
+  lawyer: 'Lawyer',
+  counsel: 'Legal counsel',
+}
+
+export type QuestionRow = {
+  id: number
+  body: string | null
+  status: string
+  has_attachment: boolean
+  student?: { name: string; role: string; division: string } | null
+  tutor?: { name: string; role: string } | null
+  subject?: { name: string } | null
+  replies?: Array<{
+    id: number
+    content: string | null
+    has_attachment: boolean
+    tutor?: { name: string } | null
+  }>
+}
+
+export type LessonRow = {
+  id: number
+  title: string
+  scheduled_at: string | null
+  status: string
+  student?: { name: string } | null
+  tutor?: { name: string } | null
+}
+
+export type AccountRow = {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  role: string
+  division: string
+}
+
+export type PaymentReview = {
+  id: number
+  amount: string
+  has_slip: boolean
+  student?: { name: string; email: string } | null
+  subscription?: {
+    package?: { name: string } | null
+    tutor?: { name: string } | null
+  } | null
+}
+
+export type KycDocument = {
+  id: number
+  kind: string
+  status: string
+  user?: {
+    name: string
+    email: string
+    role: string
+    division: string
+  }
+}
+
 export type Overview = {
   learning: { students: number; tutors: number; lecturers: number }
   law: { clients: number; lawyers: number; counsel: number }
