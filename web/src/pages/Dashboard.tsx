@@ -205,7 +205,7 @@ export function DashboardPage() {
                 )}
               </section>
             ))}
-            <section id="law" className="rounded-3xl border border-line bg-white p-6">
+            <section id="law" className="scroll-mt-8 rounded-3xl border border-line bg-white p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-teal">Law advice</p>
@@ -244,7 +244,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <section id="profiles" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="profiles" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Teacher profiles</h2>
@@ -303,7 +303,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="identity" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="identity" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Identity documents</h2>
           <p className="mt-1 text-sm text-muted">People upload a NIC, passport, or driving licence. Approve it here before you approve their profile.</p>
           {kyc.length === 0 ? <p className="mt-4 text-sm text-muted">No documents are waiting.</p> : null}
@@ -354,7 +354,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="payments" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="payments" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Payments to check</h2>
           <p className="mt-1 text-sm text-muted">Bank slips sent from the app. Open the slip, then mark the payment as received.</p>
           {payments.length === 0 ? <p className="mt-4 text-sm text-muted">No payments are waiting.</p> : null}
@@ -397,7 +397,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="questions" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="questions" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Questions</h2>
           <p className="mt-1 text-sm text-muted">What students and clients sent, including a photo or file. Closing a question does not answer it.</p>
           {questions.length === 0 ? <p className="mt-4 text-sm text-muted">No questions yet.</p> : null}
@@ -459,7 +459,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="lessons" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="lessons" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Lessons</h2>
           <p className="mt-1 text-sm text-muted">Booked lessons and consultations.</p>
           {lessons.length === 0 ? <p className="mt-4 text-sm text-muted">No lessons yet.</p> : null}
@@ -481,7 +481,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="accounts" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="accounts" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Students and clients</h2>
           <p className="mt-1 text-sm text-muted">People who learn or ask for advice. Teachers stay in Profiles.</p>
           {accounts.length === 0 ? <p className="mt-4 text-sm text-muted">No student or client accounts yet.</p> : null}
@@ -501,7 +501,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section id="waiting" className="mt-6 rounded-3xl border border-line bg-white p-6">
+        <section id="waiting" className="mt-6 scroll-mt-8 rounded-3xl border border-line bg-white p-6">
           <h2 className="text-xl font-semibold">Waiting for approval</h2>
           <p className="mt-1 text-sm text-muted">Tutors, lecturers, lawyers, and counsel appear here until you approve them.</p>
           {!overview ? <p className="mt-4 text-sm text-muted">Loading people…</p> : null}

@@ -47,12 +47,25 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('admin-nav-refresh', loadNav)
   }, [user])
 
+  useEffect(() => {
+    if (pathname !== '/dashboard') return
+    const frame = window.requestAnimationFrame(() => {
+      const panel = document.querySelector('main')
+      if (!hash) {
+        panel?.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+      document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pathname, hash])
+
   if (!ready) return <p className="p-8 text-muted">Loading…</p>
   if (!user) return <Navigate to="/login" replace />
 
   return (
-    <div className="grid min-h-screen grid-cols-[272px_1fr] bg-sand">
-      <aside className="sticky top-0 flex h-screen flex-col overflow-y-auto bg-deep px-4 py-5 text-white">
+    <div className="grid h-screen grid-cols-[272px_1fr] overflow-hidden bg-sand">
+      <aside className="flex h-screen flex-col overflow-y-auto bg-deep px-4 py-5 text-white">
         <div className="flex items-center gap-3 px-2">
           <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-12 w-12 rounded-2xl object-cover" />
           <div className="min-w-0">
@@ -124,7 +137,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 px-6 py-8">{children}</main>
+      <main className="min-w-0 overflow-y-auto px-6 py-8">{children}</main>
     </div>
   )
 }
