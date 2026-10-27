@@ -135,6 +135,22 @@ class AccountMailer
         );
     }
 
+    public static function queueStaffWelcome(User $user): void
+    {
+        self::send(
+            $user,
+            'Your admin desk login',
+            'Hello '.$user->name.',',
+            [
+                'A staff account was created for you on the සර් ගෙන් අහන්න admin website.',
+                'Sign in with '.$user->email.' and the password you were given in person.',
+                'Open your profile on the website to change that password.',
+            ],
+            'Open admin',
+            'https://admin.sirgenahanna.com/login',
+        );
+    }
+
     public static function queuePaymentVerified(User $user, string $packageName): void
     {
         self::send(

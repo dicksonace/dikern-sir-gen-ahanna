@@ -162,7 +162,7 @@ class PlatformController extends Controller
         $user = $request->user();
         $query = Lesson::query()
             ->select(['id', 'student_id', 'tutor_id', 'title', 'scheduled_at', 'duration_minutes', 'tracked_minutes', 'status', 'meeting_room'])
-            ->with(['student:id,name,role', 'tutor:id,name,role']);
+            ->with(['student:id,name,role', 'tutor:id,name,role', 'tutor.tutorProfile:id,user_id', 'tutor.tutorProfile.subjects:subjects.id,subjects.name,subjects.slug']);
         $this->limitToPerson($query, $user, 'student_id', 'tutor_id');
 
         return $query->orderBy('scheduled_at')->get();
@@ -221,7 +221,7 @@ class PlatformController extends Controller
             'tutor_id' => 'required|exists:users,id',
             'subject_id' => 'nullable|exists:subjects,id',
             'body' => 'nullable|string|max:2000',
-            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:20480',
+            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:102400',
         ]);
 
         $body = trim((string) ($data['body'] ?? ''));
@@ -275,7 +275,7 @@ class PlatformController extends Controller
         $data = $request->validate([
             'type' => 'required|in:text,image,document,video',
             'content' => 'nullable|string',
-            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:20480',
+            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,pdf|max:102400',
         ]);
 
         if ($data['type'] !== 'text' && ! $request->hasFile('attachment')) {
@@ -365,11 +365,37 @@ class PlatformController extends Controller
 
     public function pendingPayments()
     {
-        return Payment::query()->forAdminReview()->get()->each(function (Payment $payment) {
-            $stored = is_string($payment->slip_path) && Storage::disk('local')->exists($payment->slip_path);
-            $payment->setAttribute('has_slip', $stored);
-            $payment->makeHidden('slip_path');
-        });
+        return Payment::query()->forAdminReview()->get()->each(fn (Payment $payment) => $this->markPaymentSlip($payment));
+    }
+
+    public function payments(Request $request)
+    {
+        $status = $request->string('status')->toString();
+
+        return Payment::query()
+            ->forAdminList()
+            ->when(in_array($status, ['pending', 'verified', 'rejected'], true), fn ($query) => $query->where('payments.status', $status))
+            ->limit(200)
+            ->get()
+            ->each(fn (Payment $payment) => $this->markPaymentSlip($payment));
+    }
+
+    public function rejectPayment(Request $request, int $id)
+    {
+        $payment = Payment::query()->findOrFail($id);
+        if ($payment->status !== 'pending') {
+            throw ValidationException::withMessages([
+                'status' => ['Only a waiting payment can be turned down.'],
+            ]);
+        }
+
+        $payment->update([
+            'status' => 'rejected',
+            'verified_by' => $request->user()->id,
+            'verified_at' => now(),
+        ]);
+
+        return response()->json($payment->fresh());
     }
 
     public function paymentFile(int $id)
@@ -559,6 +585,13 @@ class PlatformController extends Controller
         $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $file->getClientOriginalName()) ?: 'file';
 
         return $file->storeAs($folder, now()->format('YmdHis').'-'.$safe, 'local');
+    }
+
+    protected function markPaymentSlip(Payment $payment): void
+    {
+        $stored = is_string($payment->slip_path) && Storage::disk('local')->exists($payment->slip_path);
+        $payment->setAttribute('has_slip', $stored);
+        $payment->makeHidden('slip_path');
     }
 
     protected function markStoredFile(Question|QuestionReply $row): void

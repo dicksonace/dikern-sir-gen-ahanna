@@ -32,3 +32,5 @@ backend/public/storage
 
 # Misc
 *.log
+
+mobile/android/build/

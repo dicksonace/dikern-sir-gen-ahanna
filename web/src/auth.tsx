@@ -4,11 +4,25 @@ import { api, getToken, setToken, type AdminUser } from './api'
 type AuthValue = {
   user: AdminUser | null
   ready: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<AdminUser>
   logout: () => Promise<void>
+  refresh: () => Promise<void>
+  setUser: (user: AdminUser | null) => void
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
+
+function asAdmin(raw: AdminUser & { pages?: string[] | null }): AdminUser | null {
+  if (raw.role !== 'admin') return null
+  return {
+    id: raw.id,
+    name: raw.name,
+    email: raw.email,
+    phone: raw.phone ?? null,
+    role: raw.role,
+    pages: raw.pages ?? null,
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null)
@@ -21,14 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     api<AdminUser>('/me')
-      .then((me) => {
-        if (me.role !== 'admin') {
-          setToken(null)
-          setUser(null)
-          return
-        }
-        setUser(me)
-      })
+      .then((me) => setUser(asAdmin(me)))
       .catch(() => {
         setToken(null)
         setUser(null)
@@ -40,13 +47,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       ready,
+      setUser,
+      async refresh() {
+        const me = asAdmin(await api<AdminUser>('/me'))
+        if (!me) {
+          setToken(null)
+          setUser(null)
+          return
+        }
+        setUser(me)
+      },
       async login(email, password) {
         const result = await api<{ token: string; user: AdminUser }>('/admin/login', {
           method: 'POST',
           body: JSON.stringify({ email, password }),
         })
+        const next = asAdmin(result.user)
+        if (!next) {
+          setToken(null)
+          throw new Error('Admin sign-in only.')
+        }
         setToken(result.token)
-        setUser(result.user)
+        setUser(next)
+        return next
       },
       async logout() {
         try {

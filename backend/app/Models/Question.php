@@ -24,6 +24,15 @@ class Question extends Model
         'attachment_kind',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'student_id' => 'integer',
+            'tutor_id' => 'integer',
+            'subject_id' => 'integer',
+        ];
+    }
+
     public function getAttachmentUrlAttribute(): ?string
     {
         if (! is_string($this->attachment_path) || ! str_contains($this->attachment_path, '/')) {

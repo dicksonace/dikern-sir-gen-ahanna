@@ -31,7 +31,7 @@ class Payment extends Model
         ];
     }
 
-    public function scopeForAdminReview(Builder $query): void
+    public function scopeForAdminList(Builder $query): void
     {
         $query->select([
             'payments.id',
@@ -46,7 +46,12 @@ class Payment extends Model
             'subscription:id,package_id,tutor_id,student_id,status',
             'subscription.package:id,name',
             'subscription.tutor:id,name',
-        ])->where('payments.status', 'pending')->latest('payments.id');
+        ])->latest('payments.id');
+    }
+
+    public function scopeForAdminReview(Builder $query): void
+    {
+        $query->forAdminList()->where('payments.status', 'pending');
     }
 
     public function subscription(): BelongsTo

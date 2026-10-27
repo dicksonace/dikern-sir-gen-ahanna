@@ -20,14 +20,14 @@ export function PageFrame({
 }) {
   return (
     <AdminShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="overflow-hidden rounded-3xl border border-line bg-white">
           <div className="h-2 bg-teal" />
-          <div className="flex flex-wrap items-start justify-between gap-3 p-6 md:p-8">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-6 md:p-8">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-teal">{eyebrow}</p>
-              <h1 className="mt-1 text-3xl font-semibold">{title}</h1>
-              <p className="mt-2 max-w-2xl text-muted">{note}</p>
+              <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">{title}</h1>
+              <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">{note}</p>
             </div>
             {action}
           </div>

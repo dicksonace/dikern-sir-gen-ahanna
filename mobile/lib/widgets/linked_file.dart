@@ -54,9 +54,12 @@ class LinkedFile extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Image.file(File(localPath!), height: 160, width: double.infinity, fit: BoxFit.cover),
+          GestureDetector(
+            onTap: () => _openImage(context, Image.file(File(localPath!))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.file(File(localPath!), height: 160, width: double.infinity, fit: BoxFit.cover),
+            ),
           ),
           const SizedBox(height: 6),
           Text(_caption, style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
@@ -66,18 +69,22 @@ class LinkedFile extends StatelessWidget {
 
     if (_kind == 'image' && url != null) {
       final token = context.read<ApiClient>().token;
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image.network(
-          url!,
-          height: 160,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          headers: {
-            'Accept': 'image/*',
-            if (token != null) 'Authorization': 'Bearer $token',
-          },
-          errorBuilder: (_, _, _) => const _FileTile(icon: Icons.broken_image_outlined, label: 'Photo could not load'),
+      final headers = {
+        'Accept': 'image/*',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      return GestureDetector(
+        onTap: () => _openImage(context, Image.network(url!, headers: headers)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            url!,
+            height: 160,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            headers: headers,
+            errorBuilder: (_, _, _) => const _FileTile(icon: Icons.broken_image_outlined, label: 'Photo could not load'),
+          ),
         ),
       );
     }
@@ -96,6 +103,35 @@ class LinkedFile extends StatelessWidget {
               );
             }
           : null,
+    );
+  }
+}
+
+void _openImage(BuildContext context, Image image) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ImagePreview(image: image)));
+}
+
+class _ImagePreview extends StatelessWidget {
+  final Image image;
+
+  const _ImagePreview({required this.image});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: const Text('Photo')),
+      body: InteractiveViewer(
+        minScale: 1,
+        maxScale: 5,
+        child: Center(
+          child: Image(
+            image: image.image,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const Text('Photo could not load', style: TextStyle(color: Colors.white)),
+          ),
+        ),
+      ),
     );
   }
 }

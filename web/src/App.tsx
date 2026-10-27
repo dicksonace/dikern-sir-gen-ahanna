@@ -1,15 +1,19 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth'
+import { AccountPage } from './pages/Account'
 import { ApprovalsPage } from './pages/Approvals'
+import { CatalogPage } from './pages/Catalog'
 import { DashboardPage } from './pages/Dashboard'
 import { LandingPage } from './pages/Landing'
 import { LawPage } from './pages/Law'
 import { LearningPage } from './pages/Learning'
 import { LessonsPage } from './pages/Lessons'
 import { LoginPage } from './pages/Login'
+import { MailPage } from './pages/Mail'
 import { PaymentsPage } from './pages/Payments'
 import { ProfilesPage } from './pages/Profiles'
 import { QuestionsPage } from './pages/Questions'
+import { StaffPage } from './pages/Staff'
 import { StudentsPage } from './pages/Students'
 
 export default function App() {
@@ -20,12 +24,16 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/profiles" element={<ProfilesPage />} />
           <Route path="/questions" element={<QuestionsPage />} />
           <Route path="/lessons" element={<LessonsPage />} />
           <Route path="/students" element={<StudentsPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/approvals" element={<ApprovalsPage />} />
+          <Route path="/mail" element={<MailPage />} />
+          <Route path="/staff" element={<StaffPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/learning" element={<Navigate to="/learning/a-l" replace />} />
           <Route path="/learning/:slug" element={<LearningPage />} />
           <Route path="/law" element={<Navigate to="/law/family-law" replace />} />

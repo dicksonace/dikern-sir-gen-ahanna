@@ -1,10 +1,11 @@
 import { Link, Navigate } from 'react-router-dom'
+import { firstOpenPath } from '../api'
 import { useAuth } from '../auth'
 
 export function LandingPage() {
   const { user, ready } = useAuth()
   if (!ready) return <p className="p-8 text-muted">Loading…</p>
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user) return <Navigate to={firstOpenPath(user)} replace />
 
   return (
     <main className="min-h-screen bg-sand text-ink">

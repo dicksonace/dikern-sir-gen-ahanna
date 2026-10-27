@@ -1,3 +1,12 @@
+int? _intOrNull(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
+}
+
+int _int(Object? value) => _intOrNull(value) ?? 0;
+
 class AppUser {
   final int id;
   final String name;
@@ -27,7 +36,7 @@ class AppUser {
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
-      id: json['id'] as int,
+      id: _int(json['id']),
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       role: json['role'] as String? ?? 'student',
@@ -72,12 +81,12 @@ class TutorProfile {
   factory TutorProfile.fromJson(Map<String, dynamic> json) {
     final slots = json['available_slots'];
     return TutorProfile(
-      id: json['id'] as int,
-      userId: json['user_id'] as int? ?? 0,
+      id: _int(json['id']),
+      userId: _intOrNull(json['user_id']) ?? 0,
       bio: json['bio'] as String?,
       qualifications: json['qualifications'] as String?,
       experience: json['experience'] as String?,
-      satisfactionPoints: json['satisfaction_points'] as int? ?? 0,
+      satisfactionPoints: _intOrNull(json['satisfaction_points']) ?? 0,
       status: json['status'] as String? ?? 'pending',
       availableSlots: slots is List ? slots.map((e) => e.toString()).toList() : const [],
       user: json['user'] is Map<String, dynamic>
@@ -90,6 +99,12 @@ class TutorProfile {
           const [],
     );
   }
+
+  @override
+  bool operator ==(Object other) => other is TutorProfile && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 
   String get displayName => user?.name ?? 'Tutor #$id';
   String get subjectLabel => subjects.map((s) => s.name).join(' · ');
@@ -135,13 +150,19 @@ class Subject {
 
   factory Subject.fromJson(Map<String, dynamic> json) {
     return Subject(
-      id: json['id'] as int,
+      id: _int(json['id']),
       name: json['name'] as String? ?? '',
       slug: json['slug'] as String? ?? '',
       icon: json['icon'] as String?,
       color: json['color'] as String?,
     );
   }
+
+  @override
+  bool operator ==(Object other) => other is Subject && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class LearningTrack {
@@ -163,7 +184,7 @@ class LearningTrack {
 
   factory LearningTrack.fromJson(Map<String, dynamic> json) {
     return LearningTrack(
-      id: json['id'] as int,
+      id: _int(json['id']),
       name: json['name'] as String? ?? '',
       slug: json['slug'] as String? ?? '',
       kind: json['kind'] as String? ?? 'subjects',
@@ -189,11 +210,11 @@ class PackageModel {
 
   factory PackageModel.fromJson(Map<String, dynamic> json) {
     return PackageModel(
-      id: json['id'] as int,
+      id: _int(json['id']),
       name: json['name'] as String? ?? '',
       description: json['description'] as String?,
       price: double.tryParse('${json['price']}') ?? 0,
-      weeklyHours: json['weekly_hours'] as int? ?? 2,
+      weeklyHours: _intOrNull(json['weekly_hours']) ?? 2,
     );
   }
 }
@@ -223,12 +244,12 @@ class LessonModel {
 
   factory LessonModel.fromJson(Map<String, dynamic> json) {
     return LessonModel(
-      id: json['id'] as int,
+      id: _int(json['id']),
       title: json['title'] as String? ?? 'Lesson',
       status: json['status'] as String? ?? 'scheduled',
       scheduledAt: json['scheduled_at'] != null ? DateTime.tryParse('${json['scheduled_at']}') : null,
-      durationMinutes: json['duration_minutes'] as int? ?? 120,
-      trackedMinutes: json['tracked_minutes'] as int? ?? 0,
+      durationMinutes: _intOrNull(json['duration_minutes']) ?? 120,
+      trackedMinutes: _intOrNull(json['tracked_minutes']) ?? 0,
       meetingRoom: json['meeting_room'] as String?,
       student: json['student'] is Map<String, dynamic>
           ? AppUser.fromJson(json['student'] as Map<String, dynamic>)
@@ -261,7 +282,7 @@ class QuestionReply {
 
   factory QuestionReply.fromJson(Map<String, dynamic> json) {
     return QuestionReply(
-      id: json['id'] as int,
+      id: _int(json['id']),
       type: json['type'] as String? ?? 'text',
       content: json['content'] as String?,
       attachmentUrl: json['attachment_url'] as String?,
@@ -305,11 +326,11 @@ class QuestionModel {
 
   factory QuestionModel.fromJson(Map<String, dynamic> json) {
     return QuestionModel(
-      id: json['id'] as int,
+      id: _int(json['id']),
       body: json['body'] as String? ?? '',
       status: json['status'] as String? ?? 'open',
-      studentId: json['student_id'] as int?,
-      tutorId: json['tutor_id'] as int?,
+      studentId: _intOrNull(json['student_id']),
+      tutorId: _intOrNull(json['tutor_id']),
       attachmentPath: json['attachment_path'] as String?,
       attachmentUrl: json['attachment_url'] as String?,
       attachmentKind: json['attachment_kind'] as String?,
@@ -353,7 +374,7 @@ class PaymentModel {
 
   factory PaymentModel.fromJson(Map<String, dynamic> json) {
     return PaymentModel(
-      id: json['id'] as int,
+      id: _int(json['id']),
       amount: double.tryParse('${json['amount']}') ?? 0,
       status: json['status'] as String? ?? 'pending',
       method: json['method'] as String? ?? 'bank_transfer',
@@ -387,7 +408,7 @@ class CommissionModel {
 
   factory CommissionModel.fromJson(Map<String, dynamic> json) {
     return CommissionModel(
-      id: json['id'] as int,
+      id: _int(json['id']),
       amount: double.tryParse('${json['amount']}') ?? 0,
       packageAmount: double.tryParse('${json['package_amount']}') ?? 0,
       rate: double.tryParse('${json['rate']}') ?? 0,
@@ -416,12 +437,12 @@ class AdminStats {
 
   factory AdminStats.fromJson(Map<String, dynamic> json) {
     return AdminStats(
-      students: json['students'] as int? ?? 0,
-      tutors: json['tutors'] as int? ?? 0,
-      pendingTutors: json['pending_tutors'] as int? ?? 0,
-      pendingPayments: json['pending_payments'] as int? ?? 0,
-      activeSubscriptions: json['active_subscriptions'] as int? ?? 0,
-      openQuestions: json['open_questions'] as int? ?? 0,
+      students: _intOrNull(json['students']) ?? 0,
+      tutors: _intOrNull(json['tutors']) ?? 0,
+      pendingTutors: _intOrNull(json['pending_tutors']) ?? 0,
+      pendingPayments: _intOrNull(json['pending_payments']) ?? 0,
+      activeSubscriptions: _intOrNull(json['active_subscriptions']) ?? 0,
+      openQuestions: _intOrNull(json['open_questions']) ?? 0,
     );
   }
 }

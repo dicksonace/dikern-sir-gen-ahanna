@@ -29,6 +29,7 @@ class User extends Authenticatable
         'division',
         'phone',
         'avatar_url',
+        'pages',
     ];
 
     protected $hidden = [
@@ -41,7 +42,42 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'pages' => 'array',
         ];
+    }
+
+    public const ADMIN_PAGES = [
+        'dashboard',
+        'catalog',
+        'learning',
+        'law',
+        'profiles',
+        'questions',
+        'lessons',
+        'students',
+        'payments',
+        'approvals',
+        'mail',
+        'staff',
+        'account',
+    ];
+
+    public function canOpenAdmin(string $page): bool
+    {
+        if ($this->role !== 'admin') {
+            return false;
+        }
+
+        if ($page === 'account' || $this->pages === null) {
+            return true;
+        }
+
+        return in_array($page, $this->pages, true);
+    }
+
+    public function isFullAdmin(): bool
+    {
+        return $this->role === 'admin' && $this->pages === null;
     }
 
     public function tutorProfile(): HasOne

@@ -91,6 +91,15 @@ cat > '$REMOTE_PUBLIC/.htaccess' << 'HT'
 </IfModule>
 HT
 
+# Question photos and videos go up to 100 MB (see PlatformController max:102400).
+cat > '$REMOTE_PUBLIC/.user.ini' << 'INI'
+upload_max_filesize = 110M
+post_max_size = 120M
+max_execution_time = 300
+max_input_time = 300
+memory_limit = 256M
+INI
+
 cp '$REMOTE_BASE/public/robots.txt' '$REMOTE_PUBLIC/robots.txt' 2>/dev/null || true
 ln -sfn ../../lms/storage/app/public '$REMOTE_PUBLIC/storage'
 REMOTE

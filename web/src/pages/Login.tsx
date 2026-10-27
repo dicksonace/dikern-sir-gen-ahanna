@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { ApiError } from '../api'
+import { ApiError, firstOpenPath } from '../api'
 import { useAuth } from '../auth'
 
 export function LoginPage() {
@@ -12,15 +12,15 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (!ready) return <p className="p-8 text-muted">Loading…</p>
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user) return <Navigate to={firstOpenPath(user)} replace />
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     setSubmitting(true)
     setError('')
     try {
-      await login(email, password)
-      navigate('/dashboard')
+      const next = await login(email, password)
+      navigate(firstOpenPath(next))
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not sign in.')
     } finally {

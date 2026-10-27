@@ -431,11 +431,16 @@ class _StudentHomeState extends State<_StudentHome> {
                                         ],
                                       ),
                                       const SizedBox(height: 12),
-                                      Text(lesson.title, style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 17)),
+                                      Text(
+                                        law || (lesson.tutor?.tutorProfile?.subjectLabel ?? '').isEmpty
+                                            ? lesson.title
+                                            : lesson.tutor!.tutorProfile!.subjectLabel,
+                                        style: GoogleFonts.sora(fontWeight: FontWeight.w700, fontSize: 17),
+                                      ),
                                       Text(
                                         law
                                             ? 'with ${lesson.tutor?.name ?? 'your adviser'}'
-                                            : 'with ${lesson.tutor?.name ?? 'Tutor'}',
+                                            : '${lesson.tutor?.roleLabel ?? 'Tutor'} ${lesson.tutor?.name ?? ''} · ${lesson.title}',
                                         style: const TextStyle(color: AppColors.muted),
                                       ),
                                       const SizedBox(height: 16),
@@ -896,12 +901,14 @@ class _QuestionsTabState extends State<_QuestionsTab> {
             filename: attachmentName,
           );
       controller.clear();
-      attachmentPath = null;
-      attachmentName = null;
-      await _load();
+      setState(() {
+        attachmentPath = null;
+        attachmentName = null;
+      });
+      await _load(force: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Question posted to API')),
+          const SnackBar(content: Text('Question sent')),
         );
       }
     } catch (e) {
@@ -949,6 +956,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                         )
                       else
                         DropdownButtonFormField<TutorProfile>(
+                          key: ValueKey('tutor-${selectedTutor?.id}-${tutors.length}'),
                           initialValue: selectedTutor,
                           items: tutors
                               .map((t) => DropdownMenuItem(
@@ -965,6 +973,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                       if (!law && subjects.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         DropdownButtonFormField<Subject>(
+                          key: ValueKey('subject-${selectedTutor?.id}-${selectedSubject?.id}'),
                           initialValue: selectedSubject,
                           items: subjects
                               .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))

@@ -101,11 +101,20 @@ class ApiClient extends ChangeNotifier {
   }
 
   Future<dynamic> _handle(http.Response res) {
-    final body = res.body.isEmpty ? null : jsonDecode(res.body);
+    Object? body;
+    try {
+      body = res.body.isEmpty ? null : jsonDecode(res.body);
+    } on FormatException {
+      body = null;
+    }
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return Future.value(body);
     }
-    String message = 'Request failed (${res.statusCode})';
+    String message = res.statusCode == 413
+        ? 'This file is too large to upload. Try one under 100 MB.'
+        : res.statusCode == 429
+            ? 'Too many tries. Wait a minute, then try again.'
+            : 'Request failed (${res.statusCode})';
     if (body is Map) {
       if (body['message'] != null) message = body['message'].toString();
       if (body['errors'] is Map) {

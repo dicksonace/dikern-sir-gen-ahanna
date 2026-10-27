@@ -61,6 +61,22 @@ class TrackController extends Controller
         return response()->json($subject, 201);
     }
 
+    public function storePracticeArea(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+        ]);
+
+        $subject = Subject::create([
+            'name' => $data['name'],
+            'slug' => $this->uniqueSlug(Str::slug($data['name'])),
+            'division' => 'law',
+        ]);
+        ReadCache::bump('catalog');
+
+        return response()->json($subject, 201);
+    }
+
     public function updateSubject(Request $request, Subject $subject)
     {
         $data = $request->validate([

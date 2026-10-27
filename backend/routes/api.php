@@ -52,7 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/points', [PlatformController::class, 'givePoint']);
     Route::get('/tutor/earnings', [PlatformController::class, 'tutorEarnings']);
 
-    Route::middleware('admin')->prefix('admin')->group(function () {
+    Route::middleware(['admin', 'admin.page'])->prefix('admin')->group(function () {
         Route::get('/overview', [AdminController::class, 'overview']);
         Route::get('/profiles', [AdminController::class, 'profiles']);
         Route::get('/accounts', [AdminController::class, 'accounts']);
@@ -73,7 +73,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/pending-tutors', [PlatformController::class, 'pendingTutors']);
         Route::post('/tutors/{id}/approve', [PlatformController::class, 'approveTutor']);
         Route::get('/pending-payments', [PlatformController::class, 'pendingPayments']);
+        Route::get('/payments', [PlatformController::class, 'payments']);
         Route::get('/payments/{id}/file', [PlatformController::class, 'paymentFile']);
         Route::post('/payments/{id}/verify', [PlatformController::class, 'verifyPayment']);
+        Route::post('/payments/{id}/reject', [PlatformController::class, 'rejectPayment']);
+        Route::get('/packages', [AdminController::class, 'packages']);
+        Route::post('/packages', [AdminController::class, 'storePackage']);
+        Route::put('/packages/{package}', [AdminController::class, 'updatePackage']);
+        Route::post('/practice-areas', [TrackController::class, 'storePracticeArea']);
+        Route::post('/cache/refresh', [AdminController::class, 'refreshCache']);
+        Route::get('/staff', [AdminController::class, 'staff']);
+        Route::post('/staff', [AdminController::class, 'storeStaff']);
+        Route::put('/staff/{user}', [AdminController::class, 'updateStaff']);
+        Route::delete('/staff/{user}', [AdminController::class, 'destroyStaff']);
+        Route::get('/mail', [AdminController::class, 'mailQueue']);
+        Route::post('/mail/run', [AdminController::class, 'runMailQueue']);
+        Route::post('/mail/retry/{uuid}', [AdminController::class, 'retryMail']);
+        Route::post('/mail/retry-all', [AdminController::class, 'retryAllMail']);
     });
 });

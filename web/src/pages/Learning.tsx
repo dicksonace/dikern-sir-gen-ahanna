@@ -40,6 +40,7 @@ export function LearningPage() {
   const [tutors, setTutors] = useState<Tutor[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [subjectName, setSubjectName] = useState('')
+  const [subjectEdits, setSubjectEdits] = useState<Record<number, string>>({})
   const [trackName, setTrackName] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState('')
@@ -80,7 +81,7 @@ export function LearningPage() {
     setDescription(current.description ?? '')
   }, [slug, tracks])
 
-  async function saveTrack(extra?: { description?: string }) {
+  async function saveTrack(extra?: { description?: string; is_active?: boolean }) {
     if (!selected) return
     setSaving(true)
     setError('')
@@ -90,8 +91,25 @@ export function LearningPage() {
         body: JSON.stringify({
           name: trackName,
           ...(extra?.description !== undefined ? { description: extra.description } : {}),
+          ...(extra?.is_active !== undefined ? { is_active: extra.is_active } : {}),
         }),
       })
+      window.dispatchEvent(new Event('admin-nav-refresh'))
+      await load(selected.id)
+    } catch (caught) {
+      setError(messageFrom(caught))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function renameSubject(id: number) {
+    const name = (subjectEdits[id] ?? '').trim()
+    if (!name || !selected) return
+    setSaving(true)
+    setError('')
+    try {
+      await api(`/admin/subjects/${id}`, { method: 'PUT', body: JSON.stringify({ name }) })
       window.dispatchEvent(new Event('admin-nav-refresh'))
       await load(selected.id)
     } catch (caught) {
@@ -122,7 +140,7 @@ export function LearningPage() {
 
   return (
     <AdminShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="overflow-hidden rounded-3xl border border-line bg-white">
           <div className="h-2" style={{ background: accent[selected?.slug ?? ''] ?? '#0D7377' }} />
           <div className="p-6 md:p-8">
@@ -133,10 +151,11 @@ export function LearningPage() {
                 ? 'One scholarship programme. Subjects such as Chemistry stay on For A/L.'
                 : 'Students pick this track in the app. Tutors and lecturers are listed by the subjects they teach.'}
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
               <Stat label={selected?.kind === 'programme' ? 'Programme' : 'Subjects'} value={selected?.kind === 'programme' ? 1 : selected?.subjects.length ?? '—'} />
               <Stat label="Tutors" value={selected ? tutorCount : '—'} />
               <Stat label="Lecturers" value={selected ? lecturerCount : '—'} />
+              <Stat label="In the app" value={selected ? (selected.is_active ? 'Live' : 'Hidden') : '—'} />
             </div>
           </div>
         </div>
@@ -153,7 +172,21 @@ export function LearningPage() {
                   <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                     {selected.subjects.map((subject) => (
                       <li key={subject.id} className="rounded-2xl bg-sand px-4 py-3">
-                        <p className="font-semibold">{subject.name}</p>
+                        <div className="flex gap-2">
+                          <input
+                            value={subjectEdits[subject.id] ?? subject.name}
+                            onChange={(event) => setSubjectEdits((current) => ({ ...current, [subject.id]: event.target.value }))}
+                            className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+                          />
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void renameSubject(subject.id)}
+                            className="rounded-lg border border-line bg-white px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                          >
+                            Save
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -237,6 +270,14 @@ export function LearningPage() {
                   className="w-full rounded-xl border border-line px-3 py-3"
                 />
               ) : null}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected?.is_active ?? true}
+                  onChange={(event) => void saveTrack({ is_active: event.target.checked })}
+                />
+                Show this track in the app
+              </label>
               <button type="submit" disabled={saving || !selected} className="w-full rounded-xl bg-teal px-4 py-3 font-semibold text-white disabled:opacity-60">
                 {saving ? 'Saving…' : 'Save'}
               </button>

@@ -10,9 +10,14 @@
   --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
   background: var(--color-sand);
   color: var(--color-ink);
+  overflow-x: hidden;
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -56,6 +58,8 @@ class _AuthBodyState extends State<_AuthBody> {
   bool loading = false;
   bool hidePassword = true;
   bool awaitingCode = false;
+  int resendWait = 0;
+  Timer? resendTimer;
   String? notice;
 
   static const learningRoles = [
@@ -80,6 +84,7 @@ class _AuthBodyState extends State<_AuthBody> {
     password.dispose();
     confirm.dispose();
     code.dispose();
+    resendTimer?.cancel();
     super.dispose();
   }
 
@@ -181,13 +186,24 @@ class _AuthBodyState extends State<_AuthBody> {
     try {
       await context.read<ApiClient>().resendVerification(email: email.text.trim(), division: side);
       if (!mounted) return;
-      setState(() => notice = 'A new code is on the way. It expires in 60 minutes.');
+      setState(() => notice = 'A new code is on the way. It expires in 60 minutes. Check spam too. Only the newest code works.');
+      _startResendWait();
     } catch (e) {
       if (!mounted) return;
       setState(() => notice = '$e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  void _startResendWait() {
+    resendTimer?.cancel();
+    setState(() => resendWait = 30);
+    resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() => resendWait--);
+      if (resendWait <= 0) timer.cancel();
+    });
   }
 
   @override
@@ -330,8 +346,8 @@ class _AuthBodyState extends State<_AuthBody> {
                     child: const Text('Confirm email'),
                   ),
                   TextButton(
-                    onPressed: loading ? null : _resendCode,
-                    child: const Text('Send the code again'),
+                    onPressed: loading || resendWait > 0 ? null : _resendCode,
+                    child: Text(resendWait > 0 ? 'Send the code again in ${resendWait}s' : 'Send the code again'),
                   ),
                 ],
                 if (!widget.registering)

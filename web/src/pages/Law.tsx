@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { AdminShell } from '../components/AdminShell'
+import { DataTable, Pager, StatCard, Toolbar, useTable } from '../ui'
 
 type Area = { id: number; name: string; slug: string; color: string | null }
 type Person = {
@@ -81,7 +82,7 @@ export function LawPage() {
 
   return (
     <AdminShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="overflow-hidden rounded-3xl border border-line bg-white">
           <div className="h-2" style={{ background: accent }} />
           <div className="p-6 md:p-8">
@@ -91,9 +92,9 @@ export function LawPage() {
               Clients book a lawyer or legal counsel in this area. It is not an exam track.
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <Stat label="Lawyers" value={area ? lawyers.length : '—'} />
-              <Stat label="Legal counsel" value={area ? counsel.length : '—'} />
-              <Stat label="Packages" value={packages.length || '—'} />
+              <StatCard label="Lawyers" value={area ? lawyers.length : '—'} />
+              <StatCard label="Legal counsel" value={area ? counsel.length : '—'} />
+              <StatCard label="Packages" value={packages.length || '—'} />
             </div>
           </div>
         </div>
@@ -146,13 +147,8 @@ export function LawPage() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-2xl bg-sand px-4 py-3">
-      <p className="text-2xl font-semibold">{value}</p>
-      <p className="text-sm text-muted">{label}</p>
-    </div>
-  )
+function matchPerson(row: Person, q: string) {
+  return `${row.user?.name ?? ''} ${row.user?.email ?? ''} ${row.bio ?? ''} ${row.qualifications ?? ''}`.toLowerCase().includes(q)
 }
 
 function PeopleGroup({
@@ -166,46 +162,32 @@ function PeopleGroup({
   people: Person[]
   ready: boolean
 }) {
+  const table = useTable(people, matchPerson, 8)
   return (
-    <section className="rounded-3xl border border-line bg-white p-5">
+    <section>
       <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-muted">{hint}</p>
-      {!ready ? <p className="mt-4 text-sm text-muted">Loading…</p> : null}
-      {ready && people.length === 0 ? <p className="mt-4 text-sm text-muted">No one approved in this area yet.</p> : null}
-      <ul className="mt-4 space-y-3">
-        {people.map((person) => {
+      <p className="mt-1 mb-3 text-sm text-muted">{hint}</p>
+      {!ready ? <p className="mb-3 text-sm text-muted">Loading…</p> : null}
+      <Toolbar q={table.q} onSearch={(value) => { table.setQ(value); table.setPage(1) }} placeholder={`Search ${title.toLowerCase()}`} />
+      <DataTable columns={['Name', 'About', 'Points']} empty={ready && table.total === 0 ? 'No one approved in this area yet.' : undefined}>
+        {table.rows.map((person) => {
           const user = person.user
-          const initial = user?.name?.slice(0, 1).toUpperCase() || '?'
-          const slots = person.available_slots ?? []
           return (
-            <li key={person.id} className="rounded-2xl border border-line p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-semibold text-teal">
-                  {initial}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold">{user?.name}</p>
-                  <p className="text-sm text-muted">{roleLabel[user?.role ?? ''] ?? user?.role}</p>
-                </div>
-                <p className="ml-auto text-sm font-semibold text-teal">{person.satisfaction_points} pts</p>
-              </div>
-              {person.bio ? <p className="mt-3 text-sm leading-6 text-ink">{person.bio}</p> : null}
-              <p className="mt-2 text-sm text-muted">
-                {[person.qualifications, person.experience].filter(Boolean).join(' · ')}
-              </p>
-              {slots.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {slots.map((slot) => (
-                    <span key={slot} className="rounded-full bg-sand px-3 py-1 text-xs font-semibold">
-                      {slot}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </li>
+            <tr key={person.id} className="align-top">
+              <td className="px-4 py-3">
+                <p className="font-semibold">{user?.name}</p>
+                <p className="text-muted">{roleLabel[user?.role ?? ''] ?? user?.role}</p>
+              </td>
+              <td className="px-4 py-3 text-muted">
+                <p className="line-clamp-2">{person.bio}</p>
+                <p className="mt-1">{[person.qualifications, person.experience].filter(Boolean).join(' · ')}</p>
+              </td>
+              <td className="px-4 py-3 font-semibold text-teal">{person.satisfaction_points}</td>
+            </tr>
           )
         })}
-      </ul>
+      </DataTable>
+      <Pager page={table.page} pages={table.pages} total={table.total} pageSize={table.pageSize} onPage={table.setPage} />
     </section>
   )
 }
